@@ -17,6 +17,7 @@ import type { INodeInputSlot } from '@/lib/litegraph/src/interfaces'
 import type { IBaseWidget } from '@/lib/litegraph/src/types/widgets'
 import type { PriceBadge, WidgetDependency } from '@/schemas/nodeDefSchema'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
+import type { Expression } from 'jsonata'
 import jsonata from 'jsonata'
 
 const DEFAULT_NUMBER_OPTIONS: Intl.NumberFormatOptions = {
@@ -103,7 +104,7 @@ type JsonataPricingRule = {
 }
 
 type CompiledJsonataPricingRule = JsonataPricingRule & {
-  _compiled: { evaluate: (input: unknown) => unknown } | null
+  _compiled: Expression | null
 }
 
 type JsonataEvalContext = {
@@ -241,38 +242,38 @@ const formatPricingResult = (
 ): string => {
   if (!result || typeof result !== 'object') return ''
 
-  const r = result as Partial<PricingResult>
+  const r = result as PricingResult
 
   if (r.type === 'text') {
-    return (r as any).text ?? ''
+    return r.text ?? ''
   }
 
   if (r.type === 'usd') {
-    const usd = asFiniteNumber((r as any).usd)
+    const usd = asFiniteNumber(r.usd)
     if (usd === null) return ''
-    const fmt = { ...defaults, ...((r as any).format ?? {}) }
+    const fmt = { ...defaults, ...(r.format ?? {}) }
     return formatCreditsLabel(usd, fmt)
   }
 
   if (r.type === 'range_usd') {
-    const minUsd = asFiniteNumber((r as any).min_usd)
-    const maxUsd = asFiniteNumber((r as any).max_usd)
+    const minUsd = asFiniteNumber(r.min_usd)
+    const maxUsd = asFiniteNumber(r.max_usd)
     if (minUsd === null || maxUsd === null) return ''
-    const fmt = { ...defaults, ...((r as any).format ?? {}) }
+    const fmt = { ...defaults, ...(r.format ?? {}) }
     return formatCreditsRangeLabel(minUsd, maxUsd, fmt)
   }
 
   if (r.type === 'list_usd') {
-    const arr = Array.isArray((r as any).usd) ? (r as any).usd : null
+    const arr = Array.isArray(r.usd) ? r.usd : null
     if (!arr) return ''
 
     const usdValues = arr
       .map(asFiniteNumber)
-      .filter((x: any) => x != null) as number[]
+      .filter((x): x is number => x != null)
 
     if (usdValues.length === 0) return ''
 
-    const fmt = { ...defaults, ...((r as any).format ?? {}) }
+    const fmt = { ...defaults, ...(r.format ?? {}) }
     return formatCreditsListLabel(usdValues, fmt)
   }
 
@@ -284,7 +285,7 @@ const formatPricingResult = (
 // -----------------------------
 const compileRule = (rule: JsonataPricingRule): CompiledJsonataPricingRule => {
   try {
-    return { ...rule, _compiled: jsonata(rule.expr) as any }
+    return { ...rule, _compiled: jsonata(rule.expr) }
   } catch (e) {
     // Do not crash app on bad expressions; just disable rule.
     console.error('[pricing/jsonata] failed to compile expr:', rule.expr, e)
@@ -365,7 +366,7 @@ const scheduleEvaluation = (
 
   const nodeName = (node.constructor as any)?.nodeData?.name ?? ''
 
-  const promise = Promise.resolve(rule._compiled.evaluate(ctx as any))
+  const promise = Promise.resolve(rule._compiled.evaluate(ctx))
     .then((res) => {
       const label = formatPricingResult(res, rule.result_defaults ?? {})
 
@@ -485,7 +486,7 @@ export const useNodePricing = () => {
     const nodeDef = nodeDefStore.nodeDefsByName[nodeType]
     if (!nodeDef) return []
 
-    const priceBadge = (nodeDef as any).price_badge as PriceBadge | undefined
+    const priceBadge = nodeDef.price_badge
     if (!priceBadge) return []
 
     const dependsOn = priceBadge.depends_on ?? { widgets: [], inputs: [] }
