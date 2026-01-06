@@ -193,9 +193,11 @@ const buildJsonataContext = (
   const inputGroups: Record<string, number> = {}
   for (const groupName of rule.depends_on.input_groups) {
     const prefix = groupName + '.'
-    inputGroups[groupName] = node.inputs?.filter(
-      (inp: INodeInputSlot) => inp.name?.startsWith(prefix) && inp.link != null
-    ).length ?? 0
+    inputGroups[groupName] =
+      node.inputs?.filter(
+        (inp: INodeInputSlot) =>
+          inp.name?.startsWith(prefix) && inp.link != null
+      ).length ?? 0
   }
 
   return { widgets, inputs, inputGroups }
