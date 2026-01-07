@@ -315,6 +315,62 @@ describe('useNodePricing', () => {
       const price = getNodeDisplayPrice(node)
       expect(price).toBe(creditsLabel(0.07, '/second'))
     })
+
+    it('should add approximate prefix when specified', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestApproximateNode',
+        priceBadge('{"type":"usd","usd":0.05,"format":{"approximate":true}}')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toMatch(/^~\d+ credits\/Run$/)
+    })
+
+    it('should add note suffix when specified', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestNoteNode',
+        priceBadge('{"type":"usd","usd":0.05,"format":{"note":"(estimated)"}}')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toMatch(/credits\/Run \(estimated\)$/)
+    })
+
+    it('should combine approximate prefix and note suffix', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestCombinedFormatNode',
+        priceBadge(
+          '{"type":"usd","usd":0.05,"format":{"approximate":true,"note":"(beta)","suffix":"/image"}}'
+        )
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toMatch(/^~\d+ credits\/image \(beta\)$/)
+    })
+
+    it('should use custom separator for list_usd', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestListSeparatorNode',
+        priceBadge(
+          '{"type":"list_usd","usd":[0.05, 0.10],"format":{"separator":" or "}}'
+        )
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toMatch(/\d+ or \d+ credits\/Run/)
+    })
   })
 
   describe('input connectivity', () => {
@@ -491,6 +547,194 @@ describe('useNodePricing', () => {
 
       const config = getNodePricingConfig(node)
       expect(config).toBeUndefined()
+    })
+  })
+
+  describe('getNodeRevisionRef', () => {
+    it('should return a ref for a node ID', () => {
+      const { getNodeRevisionRef } = useNodePricing()
+      const ref = getNodeRevisionRef('node-1')
+
+      expect(ref).toBeDefined()
+      expect(ref.value).toBe(0)
+    })
+
+    it('should return the same ref for the same node ID', () => {
+      const { getNodeRevisionRef } = useNodePricing()
+      const ref1 = getNodeRevisionRef('node-same')
+      const ref2 = getNodeRevisionRef('node-same')
+
+      expect(ref1).toBe(ref2)
+    })
+
+    it('should return different refs for different node IDs', () => {
+      const { getNodeRevisionRef } = useNodePricing()
+      const ref1 = getNodeRevisionRef('node-a')
+      const ref2 = getNodeRevisionRef('node-b')
+
+      expect(ref1).not.toBe(ref2)
+    })
+
+    it('should handle both string and number node IDs', () => {
+      const { getNodeRevisionRef } = useNodePricing()
+      // Number ID gets stringified, so '123' and 123 should return the same ref
+      const refFromNumber = getNodeRevisionRef(123)
+      const refFromString = getNodeRevisionRef('123')
+
+      expect(refFromNumber).toBe(refFromString)
+    })
+  })
+
+  describe('triggerPriceRecalculation', () => {
+    it('should not throw for API nodes with price_badge', () => {
+      const { triggerPriceRecalculation } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestTriggerNode',
+        priceBadge('{"type":"usd","usd":0.05}')
+      )
+
+      expect(() => triggerPriceRecalculation(node)).not.toThrow()
+    })
+
+    it('should not throw for non-API nodes', () => {
+      const { triggerPriceRecalculation } = useNodePricing()
+      const node: any = {
+        id: 'test',
+        widgets: [],
+        constructor: {
+          nodeData: {
+            name: 'RegularNode',
+            api_node: false
+          }
+        }
+      }
+
+      expect(() => triggerPriceRecalculation(node)).not.toThrow()
+    })
+  })
+
+  describe('error handling', () => {
+    it('should return empty string for invalid JSONata expression', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestInvalidExprNode',
+        // Invalid JSONata syntax (unclosed parenthesis)
+        priceBadge('{"type":"usd","usd": (widgets.count * 0.01')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      // Should not crash, just return empty
+      expect(price).toBe('')
+    })
+
+    it('should return empty string for expression that throws at runtime', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestRuntimeErrorNode',
+        // Expression that will fail at runtime (calling function on undefined)
+        priceBadge('$lookup(undefined, "key")')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toBe('')
+    })
+
+    it('should return empty string for invalid PricingResult type', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestInvalidResultTypeNode',
+        // Returns object with invalid type field
+        priceBadge('{"type":"invalid_type","value":123}')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toBe('')
+    })
+
+    it('should return empty string for PricingResult missing type field', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestMissingTypeNode',
+        // Returns object without type field
+        priceBadge('{"usd":0.05}')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toBe('')
+    })
+
+    it('should return empty string for non-object result', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestNonObjectNode',
+        // Returns a plain number instead of PricingResult object
+        priceBadge('0.05')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toBe('')
+    })
+
+    it('should return empty string for null result', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+      const node = createMockNodeWithPriceBadge(
+        'TestNullResultNode',
+        priceBadge('null')
+      )
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      expect(price).toBe('')
+    })
+  })
+
+  describe('input_groups connectivity', () => {
+    it('should count connected inputs in a group', async () => {
+      const { getNodeDisplayPrice } = useNodePricing()
+
+      // Create a node with autogrow-style inputs (group.input1, group.input2, etc.)
+      const node: any = {
+        id: Math.random().toString(),
+        widgets: [],
+        inputs: [
+          { name: 'videos.clip1', link: 1 }, // connected
+          { name: 'videos.clip2', link: 2 }, // connected
+          { name: 'videos.clip3', link: null }, // disconnected
+          { name: 'other_input', link: 3 } // connected but not in group
+        ],
+        constructor: {
+          nodeData: {
+            name: 'TestInputGroupNode',
+            api_node: true,
+            price_badge: {
+              engine: 'jsonata',
+              expr: '{"type":"usd","usd": inputGroups.videos * 0.05}',
+              depends_on: {
+                widgets: [],
+                inputs: [],
+                input_groups: ['videos']
+              }
+            }
+          }
+        }
+      }
+
+      getNodeDisplayPrice(node)
+      await new Promise((r) => setTimeout(r, 50))
+      const price = getNodeDisplayPrice(node)
+      // 2 connected inputs in 'videos' group * 0.05 = 0.10
+      expect(price).toBe(creditsLabel(0.1))
     })
   })
 })
