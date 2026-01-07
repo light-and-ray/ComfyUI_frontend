@@ -109,6 +109,24 @@ type CompiledJsonataPricingRule = JsonataPricingRule & {
   _compiled: Expression | null
 }
 
+/**
+ * Shape of nodeData attached to LGraphNode constructor for API nodes.
+ */
+type NodeConstructorData = {
+  name?: string
+  api_node?: boolean
+  price_badge?: PriceBadge
+}
+
+/**
+ * Extract nodeData from an LGraphNode's constructor.
+ * Centralizes the `as any` cast needed to access this runtime property.
+ */
+const getNodeConstructorData = (
+  node: LGraphNode
+): NodeConstructorData | undefined =>
+  (node.constructor as { nodeData?: NodeConstructorData }).nodeData
+
 type JsonataEvalContext = {
   widgets: Record<string, NormalizedWidgetValue>
   inputs: Record<string, { connected: boolean }>
@@ -385,7 +403,7 @@ const scheduleEvaluation = (
 
   if (!rule._compiled) return
 
-  const nodeName = (node.constructor as any)?.nodeData?.name ?? ''
+  const nodeName = getNodeConstructorData(node)?.name ?? ''
 
   const promise = Promise.resolve(rule._compiled.evaluate(ctx))
     .then((res) => {
@@ -437,10 +455,7 @@ const scheduleEvaluation = (
 const getRuleForNode = (
   node: LGraphNode
 ): CompiledJsonataPricingRule | undefined => {
-  const nodeData = (node.constructor as any)?.nodeData as
-    | { name?: string; api_node?: boolean; price_badge?: PriceBadge }
-    | undefined
-
+  const nodeData = getNodeConstructorData(node)
   if (!nodeData?.api_node) return undefined
 
   const nodeName = nodeData?.name ?? ''
@@ -467,10 +482,7 @@ export const useNodePricing = () => {
     // which causes this getter to recompute in Vue render/computed contexts.
     pricingTick.value
 
-    const nodeData = (node.constructor as any)?.nodeData as
-      | { name?: string; api_node?: boolean; price_badge?: PriceBadge }
-      | undefined
-
+    const nodeData = getNodeConstructorData(node)
     if (!nodeData?.api_node) return ''
 
     const rule = getRuleForNode(node)
