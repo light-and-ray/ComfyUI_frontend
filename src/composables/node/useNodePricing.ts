@@ -86,6 +86,18 @@ type PricingResult =
     }
   | { type: 'list_usd'; usd: number[]; format?: CreditFormatOptions }
 
+const PRICING_RESULT_TYPES = ['text', 'usd', 'range_usd', 'list_usd'] as const
+
+/** Type guard to validate that a value is a PricingResult. */
+const isPricingResult = (value: unknown): value is PricingResult =>
+  typeof value === 'object' &&
+  value !== null &&
+  'type' in value &&
+  typeof (value as { type: unknown }).type === 'string' &&
+  PRICING_RESULT_TYPES.includes(
+    (value as { type: string }).type as (typeof PRICING_RESULT_TYPES)[number]
+  )
+
 /**
  * Widget values are normalized based on their declared type:
  * - INT/FLOAT → number (or null if not parseable)
@@ -260,31 +272,34 @@ const formatPricingResult = (
   result: unknown,
   defaults: CreditFormatOptions = {}
 ): string => {
-  if (!result || typeof result !== 'object') return ''
-
-  const r = result as PricingResult
-
-  if (r.type === 'text') {
-    return r.text ?? ''
+  if (!isPricingResult(result)) {
+    if (result !== undefined && result !== null) {
+      console.warn('[pricing/jsonata] invalid result format:', result)
+    }
+    return ''
   }
 
-  if (r.type === 'usd') {
-    const usd = asFiniteNumber(r.usd)
+  if (result.type === 'text') {
+    return result.text ?? ''
+  }
+
+  if (result.type === 'usd') {
+    const usd = asFiniteNumber(result.usd)
     if (usd === null) return ''
-    const fmt = { ...defaults, ...(r.format ?? {}) }
+    const fmt = { ...defaults, ...(result.format ?? {}) }
     return formatCreditsLabel(usd, fmt)
   }
 
-  if (r.type === 'range_usd') {
-    const minUsd = asFiniteNumber(r.min_usd)
-    const maxUsd = asFiniteNumber(r.max_usd)
+  if (result.type === 'range_usd') {
+    const minUsd = asFiniteNumber(result.min_usd)
+    const maxUsd = asFiniteNumber(result.max_usd)
     if (minUsd === null || maxUsd === null) return ''
-    const fmt = { ...defaults, ...(r.format ?? {}) }
+    const fmt = { ...defaults, ...(result.format ?? {}) }
     return formatCreditsRangeLabel(minUsd, maxUsd, fmt)
   }
 
-  if (r.type === 'list_usd') {
-    const arr = Array.isArray(r.usd) ? r.usd : null
+  if (result.type === 'list_usd') {
+    const arr = Array.isArray(result.usd) ? result.usd : null
     if (!arr) return ''
 
     const usdValues = arr
@@ -293,7 +308,7 @@ const formatPricingResult = (
 
     if (usdValues.length === 0) return ''
 
-    const fmt = { ...defaults, ...(r.format ?? {}) }
+    const fmt = { ...defaults, ...(result.format ?? {}) }
     return formatCreditsListLabel(usdValues, fmt)
   }
 
