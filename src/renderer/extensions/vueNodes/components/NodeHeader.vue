@@ -204,6 +204,7 @@ const {
   getRelevantWidgetNames,
   hasDynamicPricing,
   getInputGroupPrefixes,
+  getInputNames,
   getNodeRevisionRef
 } = useNodePricing()
 // Cache pricing metadata (won't change during node lifetime)
@@ -215,6 +216,9 @@ const relevantPricingWidgets = computed(() =>
 )
 const inputGroupPrefixes = computed(() =>
   nodeData?.apiNode ? getInputGroupPrefixes(nodeData.type) : []
+)
+const relevantInputNames = computed(() =>
+  nodeData?.apiNode ? getInputNames(nodeData.type) : []
 )
 const nodeBadges = computed<NodeBadgeProps[]>(() => {
   // Only create reactive dependencies for API nodes with DYNAMIC pricing
@@ -229,6 +233,15 @@ const nodeBadges = computed<NodeBadgeProps[]>(() => {
         if (relevantNames.includes(w.name)) w.value
       })
     }
+    // Access input connections for regular inputs
+    const inputNames = relevantInputNames.value
+    if (inputNames.length > 0) {
+      nodeData?.inputs?.forEach((inp) => {
+        if (inp.name && inputNames.includes(inp.name)) {
+          void inp.link // Access link to create reactive dependency
+        }
+      })
+    }
     // Access input connections for input_groups (e.g., autogrow inputs)
     const groupPrefixes = inputGroupPrefixes.value
     if (groupPrefixes.length > 0) {
@@ -236,7 +249,7 @@ const nodeBadges = computed<NodeBadgeProps[]>(() => {
         if (
           groupPrefixes.some((prefix) => inp.name?.startsWith(prefix + '.'))
         ) {
-          inp.link // Access link to create reactive dependency
+          void inp.link // Access link to create reactive dependency
         }
       })
     }

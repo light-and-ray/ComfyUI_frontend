@@ -130,12 +130,13 @@ export const useNodeBadge = () => {
         node.badges.push(() => badge.value)
 
         if (node.constructor.nodeData?.api_node && showApiPricingBadge.value) {
-          // JSONata rules are dynamic if they depend on any widgets/inputs
+          // JSONata rules are dynamic if they depend on any widgets/inputs/input_groups
           const pricingConfig = nodePricing.getNodePricingConfig(node)
           const hasDynamicPricing =
             !!pricingConfig &&
             ((pricingConfig.depends_on?.widgets?.length ?? 0) > 0 ||
-              (pricingConfig.depends_on?.inputs?.length ?? 0) > 0)
+              (pricingConfig.depends_on?.inputs?.length ?? 0) > 0 ||
+              (pricingConfig.depends_on?.input_groups?.length ?? 0) > 0)
 
           // Keep the existing widget-watch wiring ONLY to trigger redraws on widget change.
           // (We no longer rely on it to hold the current badge value.)
@@ -153,6 +154,45 @@ export const useNodeBadge = () => {
             // Ensure watchers are installed; ignore the returned value.
             // (This call is what registers the widget listeners in most implementations.)
             computedWithWidgetWatch(() => 0)
+
+            // Hook into connection changes to trigger price recalculation
+            // This handles both connect and disconnect in VueNodes mode
+            const relevantInputs = pricingConfig?.depends_on?.inputs ?? []
+            const inputGroupPrefixes =
+              pricingConfig?.depends_on?.input_groups ?? []
+            const hasRelevantInputs =
+              relevantInputs.length > 0 || inputGroupPrefixes.length > 0
+
+            if (hasRelevantInputs) {
+              const originalOnConnectionsChange = node.onConnectionsChange
+              node.onConnectionsChange = function (
+                type,
+                slotIndex,
+                isConnected,
+                link,
+                ioSlot
+              ) {
+                originalOnConnectionsChange?.call(
+                  this,
+                  type,
+                  slotIndex,
+                  isConnected,
+                  link,
+                  ioSlot
+                )
+                // Only trigger if this input affects pricing
+                const inputName = ioSlot?.name
+                if (!inputName) return
+                const isRelevantInput =
+                  relevantInputs.includes(inputName) ||
+                  inputGroupPrefixes.some((prefix) =>
+                    inputName.startsWith(prefix + '.')
+                  )
+                if (isRelevantInput) {
+                  nodePricing.triggerPriceRecalculation(node)
+                }
+              }
+            }
           }
 
           let lastLabel = nodePricing.getNodeDisplayPrice(node)

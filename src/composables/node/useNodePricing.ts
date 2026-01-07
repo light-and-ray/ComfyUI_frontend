@@ -583,13 +583,42 @@ export const useNodePricing = () => {
     return priceBadge.depends_on?.input_groups ?? []
   }
 
+  /**
+   * Get regular input names for a node type (for watching connection changes).
+   */
+  const getInputNames = (nodeType: string): string[] => {
+    const nodeDefStore = useNodeDefStore()
+    const nodeDef = nodeDefStore.nodeDefsByName[nodeType]
+    if (!nodeDef) return []
+
+    const priceBadge = nodeDef.price_badge
+    if (!priceBadge) return []
+
+    return priceBadge.depends_on?.inputs ?? []
+  }
+
+  /**
+   * Trigger price recalculation for a node (call when inputs change).
+   * Forces re-evaluation by calling getNodeDisplayPrice which will detect
+   * the signature change and schedule a new evaluation.
+   */
+  const triggerPriceRecalculation = (node: LGraphNode): void => {
+    const nodeData = getNodeConstructorData(node)
+    if (!nodeData?.api_node) return
+
+    // Call getNodeDisplayPrice to trigger evaluation if signature changed
+    getNodeDisplayPrice(node)
+  }
+
   return {
     getNodeDisplayPrice,
     getNodePricingConfig,
     getRelevantWidgetNames,
     hasDynamicPricing,
     getInputGroupPrefixes,
+    getInputNames,
     getNodeRevisionRef, // Each node has its own independent ref, so updates to one won't trigger others
+    triggerPriceRecalculation,
     pricingRevision: readonly(pricingTick) // reactive invalidation signal
   }
 }
