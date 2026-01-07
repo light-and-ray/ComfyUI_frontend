@@ -17,7 +17,11 @@ import { LiteGraph } from '@/lib/litegraph/src/litegraph'
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import type { INodeInputSlot } from '@/lib/litegraph/src/interfaces'
 import type { IBaseWidget } from '@/lib/litegraph/src/types/widgets'
-import type { PriceBadge, WidgetDependency } from '@/schemas/nodeDefSchema'
+import type {
+  ComfyNodeDef,
+  PriceBadge,
+  WidgetDependency
+} from '@/schemas/nodeDefSchema'
 import { useNodeDefStore } from '@/stores/nodeDefStore'
 import type { Expression } from 'jsonata'
 import jsonata from 'jsonata'
@@ -123,12 +127,11 @@ type CompiledJsonataPricingRule = JsonataPricingRule & {
 
 /**
  * Shape of nodeData attached to LGraphNode constructor for API nodes.
+ * Uses Pick from schema type to ensure consistency.
  */
-type NodeConstructorData = {
-  name?: string
-  api_node?: boolean
-  price_badge?: PriceBadge
-}
+type NodeConstructorData = Partial<
+  Pick<ComfyNodeDef, 'name' | 'api_node' | 'price_badge'>
+>
 
 /**
  * Extract nodeData from an LGraphNode's constructor.
