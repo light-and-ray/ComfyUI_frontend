@@ -221,37 +221,41 @@ const relevantInputNames = computed(() =>
   nodeData?.apiNode ? getInputNames(nodeData.type) : []
 )
 const nodeBadges = computed<NodeBadgeProps[]>(() => {
-  // Only create reactive dependencies for API nodes with DYNAMIC pricing
-  // Static prices are computed once and never change
-  if (isDynamicPricing.value && nodeData?.id != null) {
+  // For ALL API nodes: access per-node revision ref to detect when async pricing evaluation completes
+  // This is needed even for static pricing because JSONata 2.x evaluation is async
+  if (nodeData?.apiNode && nodeData?.id != null) {
     // Access per-node revision ref to establish dependency (each node has its own ref)
     void getNodeRevisionRef(nodeData.id).value
-    // Access only the widget values that affect pricing
-    const relevantNames = relevantPricingWidgets.value
-    if (relevantNames.length > 0) {
-      nodeData?.widgets?.forEach((w) => {
-        if (relevantNames.includes(w.name)) w.value
-      })
-    }
-    // Access input connections for regular inputs
-    const inputNames = relevantInputNames.value
-    if (inputNames.length > 0) {
-      nodeData?.inputs?.forEach((inp) => {
-        if (inp.name && inputNames.includes(inp.name)) {
-          void inp.link // Access link to create reactive dependency
-        }
-      })
-    }
-    // Access input connections for input_groups (e.g., autogrow inputs)
-    const groupPrefixes = inputGroupPrefixes.value
-    if (groupPrefixes.length > 0) {
-      nodeData?.inputs?.forEach((inp) => {
-        if (
-          groupPrefixes.some((prefix) => inp.name?.startsWith(prefix + '.'))
-        ) {
-          void inp.link // Access link to create reactive dependency
-        }
-      })
+
+    // For dynamic pricing, also track widget values and input connections
+    if (isDynamicPricing.value) {
+      // Access only the widget values that affect pricing
+      const relevantNames = relevantPricingWidgets.value
+      if (relevantNames.length > 0) {
+        nodeData?.widgets?.forEach((w) => {
+          if (relevantNames.includes(w.name)) w.value
+        })
+      }
+      // Access input connections for regular inputs
+      const inputNames = relevantInputNames.value
+      if (inputNames.length > 0) {
+        nodeData?.inputs?.forEach((inp) => {
+          if (inp.name && inputNames.includes(inp.name)) {
+            void inp.link // Access link to create reactive dependency
+          }
+        })
+      }
+      // Access input connections for input_groups (e.g., autogrow inputs)
+      const groupPrefixes = inputGroupPrefixes.value
+      if (groupPrefixes.length > 0) {
+        nodeData?.inputs?.forEach((inp) => {
+          if (
+            groupPrefixes.some((prefix) => inp.name?.startsWith(prefix + '.'))
+          ) {
+            void inp.link // Access link to create reactive dependency
+          }
+        })
+      }
     }
   }
   return [...(nodeData?.badges ?? [])].map(toValue)
