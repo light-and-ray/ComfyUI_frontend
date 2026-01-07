@@ -221,7 +221,7 @@ const nodeBadges = computed<NodeBadgeProps[]>(() => {
   // Static prices are computed once and never change
   if (isDynamicPricing.value && nodeData?.id != null) {
     // Access per-node revision ref to establish dependency (each node has its own ref)
-    getNodeRevisionRef(nodeData.id).value
+    void getNodeRevisionRef(nodeData.id).value
     // Access only the widget values that affect pricing
     const relevantNames = relevantPricingWidgets.value
     if (relevantNames.length > 0) {

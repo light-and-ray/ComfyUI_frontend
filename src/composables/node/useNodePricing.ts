@@ -480,7 +480,7 @@ export const useNodePricing = () => {
   const getNodeDisplayPrice = (node: LGraphNode): string => {
     // Make this function reactive: when async evaluation completes, we bump pricingTick,
     // which causes this getter to recompute in Vue render/computed contexts.
-    pricingTick.value
+    void pricingTick.value
 
     const nodeData = getNodeConstructorData(node)
     if (!nodeData?.api_node) return ''
