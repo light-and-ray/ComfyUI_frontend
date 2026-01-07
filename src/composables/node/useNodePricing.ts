@@ -11,7 +11,9 @@
 //   - reactive tick to update UI when async evaluation completes.
 
 import { readonly, ref } from 'vue'
+import type { Ref } from 'vue'
 import { formatCreditsFromUsd } from '@/base/credits/comfyCredits'
+import { LiteGraph } from '@/lib/litegraph/src/litegraph'
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import type { INodeInputSlot } from '@/lib/litegraph/src/interfaces'
 import type { IBaseWidget } from '@/lib/litegraph/src/types/widgets'
@@ -341,6 +343,25 @@ const getCompiledRuleForNodeType = (
 // We purposely read pricingTick.value inside getNodeDisplayPrice to create a dependency.
 const pricingTick = ref(0)
 
+// Per-node revision tracking for VueNodes mode (more efficient than global tick)
+// Uses plain Map with individual refs per node for fine-grained reactivity
+// Keys are stringified node IDs to handle both string and number ID types
+const nodeRevisions = new Map<string, Ref<number>>()
+
+/**
+ * Get or create a revision ref for a specific node.
+ * Each node has its own independent ref, so updates to one won't trigger others.
+ */
+const getNodeRevisionRef = (nodeId: string | number): Ref<number> => {
+  const key = String(nodeId)
+  let rev = nodeRevisions.get(key)
+  if (!rev) {
+    rev = ref(0)
+    nodeRevisions.set(key, rev)
+  }
+  return rev
+}
+
 // WeakMaps avoid memory leaks when nodes are removed.
 type CacheEntry = { sig: string; label: string }
 type InflightEntry = { sig: string; promise: Promise<void> }
@@ -398,8 +419,13 @@ const scheduleEvaluation = (
       const cur = inflight.get(node)
       if (cur && cur.sig === sig) inflight.delete(node)
 
-      // Trigger reactive updates for any callers depending on pricingTick
-      pricingTick.value++
+      if (LiteGraph.vueNodesMode) {
+        // VueNodes mode: bump per-node revision (only this node re-renders)
+        getNodeRevisionRef(node.id).value++
+      } else {
+        // Nodes 1.0 mode: bump global tick to trigger setDirtyCanvas
+        pricingTick.value++
+      }
     })
 
   inflight.set(node, { sig, promise })
@@ -502,10 +528,48 @@ export const useNodePricing = () => {
     return out
   }
 
+  /**
+   * Check if a node type has dynamic pricing (depends on widgets, inputs, or input_groups).
+   */
+  const hasDynamicPricing = (nodeType: string): boolean => {
+    const nodeDefStore = useNodeDefStore()
+    const nodeDef = nodeDefStore.nodeDefsByName[nodeType]
+    if (!nodeDef) return false
+
+    const priceBadge = nodeDef.price_badge
+    if (!priceBadge) return false
+
+    const dependsOn = priceBadge.depends_on
+    if (!dependsOn) return false
+
+    return (
+      (dependsOn.widgets?.length ?? 0) > 0 ||
+      (dependsOn.inputs?.length ?? 0) > 0 ||
+      (dependsOn.input_groups?.length ?? 0) > 0
+    )
+  }
+
+  /**
+   * Get input_groups prefixes for a node type (for watching connection changes).
+   */
+  const getInputGroupPrefixes = (nodeType: string): string[] => {
+    const nodeDefStore = useNodeDefStore()
+    const nodeDef = nodeDefStore.nodeDefsByName[nodeType]
+    if (!nodeDef) return []
+
+    const priceBadge = nodeDef.price_badge
+    if (!priceBadge) return []
+
+    return priceBadge.depends_on?.input_groups ?? []
+  }
+
   return {
     getNodeDisplayPrice,
     getNodePricingConfig,
     getRelevantWidgetNames,
+    hasDynamicPricing,
+    getInputGroupPrefixes,
+    getNodeRevisionRef, // Each node has its own independent ref, so updates to one won't trigger others
     pricingRevision: readonly(pricingTick) // reactive invalidation signal
   }
 }

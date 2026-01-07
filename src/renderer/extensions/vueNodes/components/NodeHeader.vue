@@ -199,18 +199,45 @@ const statusBadge = computed((): NodeBadgeProps | undefined =>
       : undefined
 )
 
-// Use pricingRevision as a dependency to re-compute badges when pricing updates
-const { pricingRevision, getRelevantWidgetNames } = useNodePricing()
+// Use per-node pricing revision to re-compute badges only when this node's pricing updates
+const {
+  getRelevantWidgetNames,
+  hasDynamicPricing,
+  getInputGroupPrefixes,
+  getNodeRevisionRef
+} = useNodePricing()
+// Cache pricing metadata (won't change during node lifetime)
+const isDynamicPricing = computed(() =>
+  nodeData?.apiNode ? hasDynamicPricing(nodeData.type) : false
+)
+const relevantPricingWidgets = computed(() =>
+  nodeData?.apiNode ? getRelevantWidgetNames(nodeData.type) : []
+)
+const inputGroupPrefixes = computed(() =>
+  nodeData?.apiNode ? getInputGroupPrefixes(nodeData.type) : []
+)
 const nodeBadges = computed<NodeBadgeProps[]>(() => {
-  // Only create reactive dependencies for API nodes with dynamic pricing
-  if (nodeData?.apiNode) {
-    // Access pricingRevision to trigger re-computation when pricing evaluations complete
-    pricingRevision.value
-    // Only access relevant widget values (those that affect pricing)
-    const relevantNames = getRelevantWidgetNames(nodeData.type)
+  // Only create reactive dependencies for API nodes with DYNAMIC pricing
+  // Static prices are computed once and never change
+  if (isDynamicPricing.value && nodeData?.id != null) {
+    // Access per-node revision ref to establish dependency (each node has its own ref)
+    getNodeRevisionRef(nodeData.id).value
+    // Access only the widget values that affect pricing
+    const relevantNames = relevantPricingWidgets.value
     if (relevantNames.length > 0) {
-      nodeData.widgets?.forEach((w) => {
+      nodeData?.widgets?.forEach((w) => {
         if (relevantNames.includes(w.name)) w.value
+      })
+    }
+    // Access input connections for input_groups (e.g., autogrow inputs)
+    const groupPrefixes = inputGroupPrefixes.value
+    if (groupPrefixes.length > 0) {
+      nodeData?.inputs?.forEach((inp) => {
+        if (
+          groupPrefixes.some((prefix) => inp.name?.startsWith(prefix + '.'))
+        ) {
+          inp.link // Access link to create reactive dependency
+        }
       })
     }
   }
