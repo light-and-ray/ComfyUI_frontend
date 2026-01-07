@@ -96,6 +96,7 @@ import { computed, onErrorCaptured, ref, toValue, watch } from 'vue'
 import EditableText from '@/components/common/EditableText.vue'
 import Button from '@/components/ui/button/Button.vue'
 import type { VueNodeData } from '@/composables/graph/useGraphNodeManager'
+import { useNodePricing } from '@/composables/node/useNodePricing'
 import { useErrorHandling } from '@/composables/useErrorHandling'
 import { st } from '@/i18n'
 import { LGraphEventMode, RenderShape } from '@/lib/litegraph/src/litegraph'
@@ -198,9 +199,23 @@ const statusBadge = computed((): NodeBadgeProps | undefined =>
       : undefined
 )
 
-const nodeBadges = computed<NodeBadgeProps[]>(() =>
-  [...(nodeData?.badges ?? [])].map(toValue)
-)
+// Use pricingRevision as a dependency to re-compute badges when pricing updates
+const { pricingRevision, getRelevantWidgetNames } = useNodePricing()
+const nodeBadges = computed<NodeBadgeProps[]>(() => {
+  // Only create reactive dependencies for API nodes with dynamic pricing
+  if (nodeData?.apiNode) {
+    // Access pricingRevision to trigger re-computation when pricing evaluations complete
+    pricingRevision.value
+    // Only access relevant widget values (those that affect pricing)
+    const relevantNames = getRelevantWidgetNames(nodeData.type)
+    if (relevantNames.length > 0) {
+      nodeData.widgets?.forEach((w) => {
+        if (relevantNames.includes(w.name)) w.value
+      })
+    }
+  }
+  return [...(nodeData?.badges ?? [])].map(toValue)
+})
 const isPinned = computed(() => Boolean(nodeData?.flags?.pinned))
 const isApiNode = computed(() => Boolean(nodeData?.apiNode))
 
