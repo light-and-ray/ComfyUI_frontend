@@ -235,7 +235,7 @@ const zPriceBadge = z.object({
   engine: z.literal('jsonata').optional().default('jsonata'),
   depends_on: zPriceBadgeDepends
     .optional()
-    .default({ widgets: [], inputs: [] }),
+    .default({ widgets: [], inputs: [], input_groups: [] }),
   expr: z.string()
 })
 

@@ -527,14 +527,22 @@ export const useNodePricing = () => {
     const priceBadge = nodeDef.price_badge
     if (!priceBadge) return []
 
-    const dependsOn = priceBadge.depends_on ?? { widgets: [], inputs: [] }
+    const dependsOn = priceBadge.depends_on ?? {
+      widgets: [],
+      inputs: [],
+      input_groups: []
+    }
 
     // Extract widget names
     const widgetNames = (dependsOn.widgets ?? []).map((w) => w.name)
 
     // Keep stable output (dedupe while preserving order)
     const out: string[] = []
-    for (const n of [...widgetNames, ...(dependsOn.inputs ?? [])]) {
+    for (const n of [
+      ...widgetNames,
+      ...(dependsOn.inputs ?? []),
+      ...(dependsOn.input_groups ?? [])
+    ]) {
       if (!out.includes(n)) out.push(n)
     }
     return out
