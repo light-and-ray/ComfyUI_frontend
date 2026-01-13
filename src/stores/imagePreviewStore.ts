@@ -3,7 +3,6 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 import type { LGraphNode, SubgraphNode } from '@/lib/litegraph/src/litegraph'
-import { Subgraph } from '@/lib/litegraph/src/litegraph'
 import { useWorkflowStore } from '@/platform/workflow/management/stores/workflowStore'
 import type {
   ExecutedWsMessage,
@@ -38,9 +37,10 @@ interface SetOutputOptions {
 }
 
 export const useNodeOutputStore = defineStore('nodeOutput', () => {
-  const { nodeIdToNodeLocatorId } = useWorkflowStore()
+  const { nodeIdToNodeLocatorId, nodeToNodeLocatorId } = useWorkflowStore()
   const { executionIdToNodeLocatorId } = useExecutionStore()
   const scheduledRevoke: Record<NodeLocatorId, { stop: () => void }> = {}
+  const latestOutput = ref<string[]>([])
 
   function scheduleRevoke(locator: NodeLocatorId, cb: () => void) {
     scheduledRevoke[locator]?.stop()
@@ -63,11 +63,11 @@ export const useNodeOutputStore = defineStore('nodeOutput', () => {
   function getNodeOutputs(
     node: LGraphNode
   ): ExecutedWsMessage['output'] | undefined {
-    return app.nodeOutputs[nodeIdToNodeLocatorId(node.id)]
+    return app.nodeOutputs[nodeToNodeLocatorId(node)]
   }
 
   function getNodePreviews(node: LGraphNode): string[] | undefined {
-    return app.nodePreviewImages[nodeIdToNodeLocatorId(node.id)]
+    return app.nodePreviewImages[nodeToNodeLocatorId(node)]
   }
 
   /**
@@ -147,6 +147,13 @@ export const useNodeOutputStore = defineStore('nodeOutput', () => {
       }
     }
 
+    //TODO:Preview params and deduplication
+    latestOutput.value =
+      (outputs as ExecutedWsMessage['output'])?.images?.map((image) => {
+        const imgUrlPart = new URLSearchParams(image)
+        const rand = app.getRandParam()
+        return api.apiURL(`/view?${imgUrlPart}${rand}`)
+      }) ?? []
     app.nodeOutputs[nodeLocatorId] = outputs
     nodeOutputs.value[nodeLocatorId] = outputs
   }
@@ -161,10 +168,7 @@ export const useNodeOutputStore = defineStore('nodeOutput', () => {
   ) {
     if (!filenames || !node) return
 
-    const locatorId =
-      node.graph instanceof Subgraph
-        ? nodeIdToNodeLocatorId(node.id, node.graph ?? undefined)
-        : `${node.id}`
+    const locatorId = nodeToNodeLocatorId(node)
     if (!locatorId) return
     if (typeof filenames === 'string') {
       setOutputsByLocatorId(
@@ -217,6 +221,7 @@ export const useNodeOutputStore = defineStore('nodeOutput', () => {
       scheduledRevoke[nodeLocatorId].stop()
       delete scheduledRevoke[nodeLocatorId]
     }
+    latestOutput.value = previewImages
     app.nodePreviewImages[nodeLocatorId] = previewImages
     nodePreviewImages.value[nodeLocatorId] = previewImages
   }
@@ -328,6 +333,39 @@ export const useNodeOutputStore = defineStore('nodeOutput', () => {
     return hadOutputs
   }
 
+  function restoreOutputs(
+    outputs: Record<string, ExecutedWsMessage['output']>
+  ) {
+    app.nodeOutputs = outputs
+    nodeOutputs.value = outputs
+  }
+
+  function updateNodeImages(node: LGraphNode) {
+    if (!node.images?.length) return
+
+    const nodeLocatorId = nodeIdToNodeLocatorId(node.id)
+
+    if (nodeLocatorId) {
+      const existingOutputs = app.nodeOutputs[nodeLocatorId]
+
+      if (existingOutputs) {
+        const updatedOutputs = {
+          ...existingOutputs,
+          images: node.images
+        }
+
+        app.nodeOutputs[nodeLocatorId] = updatedOutputs
+        nodeOutputs.value[nodeLocatorId] = updatedOutputs
+      }
+    }
+  }
+
+  function resetAllOutputsAndPreviews() {
+    app.nodeOutputs = {}
+    nodeOutputs.value = {}
+    revokeAllPreviews()
+  }
+
   return {
     // Getters
     getNodeOutputs,
@@ -340,15 +378,19 @@ export const useNodeOutputStore = defineStore('nodeOutput', () => {
     setNodeOutputsByExecutionId,
     setNodePreviewsByExecutionId,
     setNodePreviewsByNodeId,
+    updateNodeImages,
 
     // Cleanup
     revokePreviewsByExecutionId,
     revokeAllPreviews,
     revokeSubgraphPreviews,
     removeNodeOutputs,
+    restoreOutputs,
+    resetAllOutputsAndPreviews,
 
     // State
     nodeOutputs,
-    nodePreviewImages
+    nodePreviewImages,
+    latestOutput
   }
 })

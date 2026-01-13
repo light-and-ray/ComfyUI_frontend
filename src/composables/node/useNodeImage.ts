@@ -98,7 +98,7 @@ const useNodePreview = <T extends MediaElement>(
 /**
  * Attaches a preview image to a node.
  */
-export const useNodeImage = (node: LGraphNode) => {
+export const useNodeImage = (node: LGraphNode, callback?: () => void) => {
   node.previewMediaType = 'image'
 
   const loadElement = (url: string): Promise<HTMLImageElement | null> =>
@@ -112,6 +112,7 @@ export const useNodeImage = (node: LGraphNode) => {
   const onLoaded = (elements: HTMLImageElement[]) => {
     node.imageIndex = null
     node.imgs = elements
+    callback?.()
   }
 
   return useNodePreview(node, {
@@ -126,7 +127,7 @@ export const useNodeImage = (node: LGraphNode) => {
 /**
  * Attaches a preview video to a node.
  */
-export const useNodeVideo = (node: LGraphNode) => {
+export const useNodeVideo = (node: LGraphNode, callback?: () => void) => {
   node.previewMediaType = 'video'
   let minHeight = DEFAULT_VIDEO_SIZE
   let minWidth = DEFAULT_VIDEO_SIZE
@@ -167,6 +168,7 @@ export const useNodeVideo = (node: LGraphNode) => {
     const hasWidget = node.widgets?.some((w) => w.name === VIDEO_WIDGET_NAME)
     if (!hasWidget) {
       const widget = node.addDOMWidget(VIDEO_WIDGET_NAME, 'video', container, {
+        canvasOnly: true,
         hideOnZoom: false
       })
       widget.serialize = false
@@ -187,6 +189,7 @@ export const useNodeVideo = (node: LGraphNode) => {
     }
 
     node.videoContainer.replaceChildren(videoElement)
+    callback?.()
   }
 
   return useNodePreview(node, {

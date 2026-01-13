@@ -1,127 +1,177 @@
 // For more info, see https://github.com/storybookjs/eslint-plugin-storybook#configuration-flat-config-format
 import pluginJs from '@eslint/js'
 import pluginI18n from '@intlify/eslint-plugin-vue-i18n'
-import eslintPluginPrettierRecommended from 'eslint-plugin-prettier/recommended'
-import storybook from 'eslint-plugin-storybook'
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript'
+import { importX } from 'eslint-plugin-import-x'
+import oxlint from 'eslint-plugin-oxlint'
+// WORKAROUND: eslint-plugin-prettier causes segfault on Node.js 24 + Windows
+// See: https://github.com/nodejs/node/issues/58690
+// Prettier is still run separately in lint-staged, so this is safe to disable
+import eslintConfigPrettier from 'eslint-config-prettier'
+import { configs as storybookConfigs } from 'eslint-plugin-storybook'
 import unusedImports from 'eslint-plugin-unused-imports'
 import pluginVue from 'eslint-plugin-vue'
 import { defineConfig } from 'eslint/config'
 import globals from 'globals'
-import tseslint from 'typescript-eslint'
+import {
+  configs as tseslintConfigs,
+  parser as tseslintParser
+} from 'typescript-eslint'
 import vueParser from 'vue-eslint-parser'
+import path from 'node:path'
 
 const extraFileExtensions = ['.vue']
+
+const commonGlobals = {
+  ...globals.browser,
+  __COMFYUI_FRONTEND_VERSION__: 'readonly'
+} as const
+
+const settings = {
+  'import-x/resolver-next': [
+    createTypeScriptImportResolver({
+      alwaysTryTypes: true,
+      project: [
+        './tsconfig.json',
+        './apps/*/tsconfig.json',
+        './packages/*/tsconfig.json'
+      ],
+      noWarnOnMultipleProjects: true
+    })
+  ],
+  'vue-i18n': {
+    localeDir: [
+      {
+        pattern: './src/locales/**/*.json',
+        localeKey: 'path',
+        localePattern:
+          /^\.?\/?src\/locales\/(?<locale>[A-Za-z0-9-]+)\/.+\.json$/
+      }
+    ],
+    messageSyntaxVersion: '^9.0.0'
+  }
+} as const
+
+const commonParserOptions = {
+  parser: tseslintParser,
+  projectService: true,
+  tsConfigRootDir: import.meta.dirname,
+  ecmaVersion: 2020,
+  sourceType: 'module',
+  extraFileExtensions
+} as const
 
 export default defineConfig([
   {
     ignores: [
-      'src/scripts/*',
-      'src/extensions/core/*',
-      'src/types/vue-shim.d.ts',
-      'src/types/comfyRegistryTypes.ts',
-      'src/types/generatedManagerTypes.ts',
+      '.i18nrc.cjs',
+      '.nx/*',
       '**/vite.config.*.timestamp*',
-      '**/vitest.config.*.timestamp*'
+      '**/vitest.config.*.timestamp*',
+      'components.d.ts',
+      'coverage/*',
+      'dist/*',
+      'packages/registry-types/src/comfyRegistryTypes.ts',
+      'playwright-report/*',
+      'src/extensions/core/*',
+      'src/scripts/*',
+      'src/types/generatedManagerTypes.ts',
+      'src/types/vue-shim.d.ts',
+      'test-results/*',
+      'vitest.setup.ts'
     ]
   },
   {
     files: ['./**/*.{ts,mts}'],
+    settings,
     languageOptions: {
-      globals: {
-        ...globals.browser,
-        __COMFYUI_FRONTEND_VERSION__: 'readonly'
-      },
+      globals: commonGlobals,
       parserOptions: {
-        parser: tseslint.parser,
-        projectService: true,
-        tsConfigRootDir: import.meta.dirname,
-        ecmaVersion: 2020,
-        sourceType: 'module',
-        extraFileExtensions
+        ...commonParserOptions,
+        projectService: {
+          allowDefaultProject: [
+            'vite.electron.config.mts',
+            'vite.types.config.mts'
+          ]
+        }
       }
     }
   },
   {
     files: ['./**/*.vue'],
+    settings,
     languageOptions: {
-      globals: {
-        ...globals.browser,
-        __COMFYUI_FRONTEND_VERSION__: 'readonly'
-      },
+      globals: commonGlobals,
       parser: vueParser,
-      parserOptions: {
-        parser: tseslint.parser,
-        projectService: true,
-        tsConfigRootDir: import.meta.dirname,
-        ecmaVersion: 2020,
-        sourceType: 'module',
-        extraFileExtensions
-      }
+      parserOptions: commonParserOptions
     }
   },
   pluginJs.configs.recommended,
-  tseslint.configs.recommended,
+
+  tseslintConfigs.recommended,
+  // Difference in typecheck on CI vs Local
   pluginVue.configs['flat/recommended'],
-  eslintPluginPrettierRecommended,
-  storybook.configs['flat/recommended'],
+  // Use eslint-config-prettier instead of eslint-plugin-prettier to avoid Node 24 segfault
+  eslintConfigPrettier,
+  // @ts-expect-error Type incompatibility between storybook plugin and ESLint config types
+  storybookConfigs['flat/recommended'],
+  // @ts-expect-error Type incompatibility between import-x plugin and ESLint config types
+  importX.flatConfigs.recommended,
+  // @ts-expect-error Type incompatibility between import-x plugin and ESLint config types
+  importX.flatConfigs.typescript,
   {
     plugins: {
       'unused-imports': unusedImports,
-      // @ts-expect-error Bad types in the plugin
+      // @ts-expect-error Type incompatibility in i18n plugin
       '@intlify/vue-i18n': pluginI18n
     },
     rules: {
-      '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
       '@typescript-eslint/prefer-as-const': 'off',
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/no-import-type-side-effects': 'error',
-      'unused-imports/no-unused-imports': 'error',
-      'vue/no-v-html': 'off',
-      // Enforce dark-theme: instead of dark: prefix
-      'vue/no-restricted-class': ['error', '/^dark:/'],
-      'vue/multi-word-component-names': 'off', // TODO: fix
-      'vue/no-template-shadow': 'off', // TODO: fix
-      'vue/one-component-per-file': 'off', // TODO: fix
-      'vue/require-default-prop': 'off', // TODO: fix -- this one is very worthwhile
-      // Restrict deprecated PrimeVue components
-      'no-restricted-imports': [
+      '@typescript-eslint/no-empty-object-type': [
         'error',
         {
-          paths: [
-            {
-              name: 'primevue/calendar',
-              message:
-                'Calendar is deprecated in PrimeVue 4+. Use DatePicker instead: import DatePicker from "primevue/datepicker"'
-            },
-            {
-              name: 'primevue/dropdown',
-              message:
-                'Dropdown is deprecated in PrimeVue 4+. Use Select instead: import Select from "primevue/select"'
-            },
-            {
-              name: 'primevue/inputswitch',
-              message:
-                'InputSwitch is deprecated in PrimeVue 4+. Use ToggleSwitch instead: import ToggleSwitch from "primevue/toggleswitch"'
-            },
-            {
-              name: 'primevue/overlaypanel',
-              message:
-                'OverlayPanel is deprecated in PrimeVue 4+. Use Popover instead: import Popover from "primevue/popover"'
-            },
-            {
-              name: 'primevue/sidebar',
-              message:
-                'Sidebar is deprecated in PrimeVue 4+. Use Drawer instead: import Drawer from "primevue/drawer"'
-            }
-          ]
+          allowInterfaces: 'always'
         }
       ],
+      'import-x/no-useless-path-segments': 'error',
+      'import-x/no-relative-packages': 'error',
+      'unused-imports/no-unused-imports': 'error',
+      'vue/no-v-html': 'off',
+      // Prohibit dark-theme: and dark: prefixes
+      'vue/no-restricted-class': ['error', '/^dark(-theme)?:/'],
+      'vue/multi-word-component-names': 'off', // TODO: fix
+      'vue/no-template-shadow': 'off', // TODO: fix
+      'vue/match-component-import-name': 'error',
+      'vue/no-unused-properties': 'error',
+      'vue/no-unused-refs': 'error',
+      'vue/no-useless-mustaches': 'error',
+      'vue/no-useless-v-bind': 'error',
+      'vue/no-unused-emit-declarations': 'error',
+      'vue/no-use-v-else-with-v-for': 'error',
+      'vue/one-component-per-file': 'error',
+      'vue/require-default-prop': 'off', // TODO: fix -- this one is very worthwhile
+
       // i18n rules
       '@intlify/vue-i18n/no-raw-text': [
         'error',
         {
+          attributes: {
+            '/.+/': [
+              'aria-label',
+              'aria-placeholder',
+              'aria-roledescription',
+              'aria-valuetext',
+              'label',
+              'placeholder',
+              'title',
+              'v-tooltip'
+            ],
+            img: ['alt']
+          },
           // Ignore strings that are:
           // 1. Less than 2 characters
           // 2. Only symbols/numbers/whitespace (no letters)
@@ -131,24 +181,27 @@ export default defineConfig([
           ignoreNodes: ['md-icon', 'v-icon', 'pre', 'code', 'script', 'style'],
           // Brand names and technical terms that shouldn't be translated
           ignoreText: [
-            'ComfyUI',
-            'GitHub',
-            'OpenAI',
             'API',
-            'URL',
-            'JSON',
-            'YAML',
-            'GPU',
-            'CPU',
-            'RAM',
-            'GB',
-            'MB',
-            'KB',
-            'ms',
-            'fps',
-            'px',
             'App Data:',
-            'App Path:'
+            'App Path:',
+            'ComfyUI',
+            'CPU',
+            'fps',
+            'GB',
+            'GitHub',
+            'GPU',
+            'JSON',
+            'KB',
+            'LoRA',
+            'MB',
+            'ms',
+            'OpenAI',
+            'png',
+            'px',
+            'RAM',
+            'URL',
+            'YAML',
+            '1.2 MB'
           ]
         }
       ]
@@ -161,6 +214,58 @@ export default defineConfig([
         'error',
         { disallowTypeAnnotations: false }
       ]
+    }
+  },
+  {
+    files: ['**/*.spec.ts'],
+    ignores: ['browser_tests/tests/**/*.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message: '.spec.ts files are only allowed under browser_tests/tests/'
+        }
+      ]
+    }
+  },
+  {
+    files: ['browser_tests/tests/**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Program',
+          message:
+            '.test.ts files are not allowed in browser_tests/tests/; use .spec.ts instead'
+        }
+      ]
+    }
+  },
+  {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'off',
+      'no-console': 'off'
+    }
+  },
+
+  // Turn off ESLint rules that are already handled by oxlint
+  ...oxlint.buildFromOxlintConfigFile(
+    path.resolve(import.meta.dirname, '.oxlintrc.json')
+  ),
+  {
+    rules: {
+      'import-x/default': 'off',
+      'import-x/export': 'off',
+      'import-x/namespace': 'off',
+      'import-x/no-duplicates': 'off',
+      'import-x/consistent-type-specifier-style': 'off'
     }
   }
 ])

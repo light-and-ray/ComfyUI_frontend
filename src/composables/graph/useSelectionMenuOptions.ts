@@ -4,7 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useCommandStore } from '@/stores/commandStore'
 
 import { useFrameNodes } from './useFrameNodes'
-import { BadgeVariant, type MenuOption } from './useMoreOptionsMenu'
+import { BadgeVariant } from './useMoreOptionsMenu'
+import type { MenuOption } from './useMoreOptionsMenu'
 import { useNodeArrangement } from './useNodeArrangement'
 import { useSelectionOperations } from './useSelectionOperations'
 import { useSubgraphOperations } from './useSubgraphOperations'
@@ -62,9 +63,29 @@ export function useSelectionMenuOptions() {
     }
   ]
 
-  const getSubgraphOptions = (hasSubgraphs: boolean): MenuOption[] => {
+  const getSubgraphOptions = ({
+    hasSubgraphs,
+    hasMultipleSelection
+  }: {
+    hasSubgraphs: boolean
+    hasMultipleSelection: boolean
+  }): MenuOption[] => {
+    const convertOption: MenuOption = {
+      label: t('contextMenu.Convert to Subgraph'),
+      icon: 'icon-[lucide--shrink]',
+      action: convertToSubgraph,
+      badge: BadgeVariant.NEW
+    }
+
+    const options: MenuOption[] = []
+    const showConvertOption = !hasSubgraphs || hasMultipleSelection
+
+    if (showConvertOption) {
+      options.push(convertOption)
+    }
+
     if (hasSubgraphs) {
-      return [
+      options.push(
         {
           label: t('contextMenu.Add Subgraph to Library'),
           icon: 'icon-[lucide--folder-plus]',
@@ -75,17 +96,10 @@ export function useSelectionMenuOptions() {
           icon: 'icon-[lucide--expand]',
           action: unpackSubgraph
         }
-      ]
-    } else {
-      return [
-        {
-          label: t('contextMenu.Convert to Subgraph'),
-          icon: 'icon-[lucide--shrink]',
-          action: convertToSubgraph,
-          badge: BadgeVariant.NEW
-        }
-      ]
+      )
     }
+
+    return options
   }
 
   const getMultipleNodesOptions = (): MenuOption[] => {

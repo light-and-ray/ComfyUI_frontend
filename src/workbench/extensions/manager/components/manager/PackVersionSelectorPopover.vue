@@ -1,15 +1,15 @@
 <template>
   <div class="w-64 pt-1">
     <div class="py-2">
-      <span class="pl-3 text-md font-semibold text-neutral-500">
+      <span class="text-md pl-3 font-semibold text-neutral-500">
         {{ $t('manager.selectVersion') }}
       </span>
     </div>
     <div
       v-if="isLoadingVersions || isQueueing"
-      class="text-center text-muted py-4 flex flex-col items-center"
+      class="flex flex-col items-center py-4 text-center text-muted"
     >
-      <ProgressSpinner class="w-8 h-8 mb-2" />
+      <ProgressSpinner class="mb-2 h-8 w-8" />
       {{ $t('manager.loadingVersions') }}
     </div>
     <div v-else-if="versionOptions.length === 0" class="py-2">
@@ -27,13 +27,13 @@
       option-value="value"
       :options="processedVersionOptions"
       :highlight-on-select="false"
-      class="w-full max-h-[50vh] border-none shadow-none rounded-md"
+      class="max-h-[50vh] w-full rounded-md border-none shadow-none"
       :pt="{
         listContainer: { class: 'scrollbar-hide' }
       }"
     >
       <template #option="slotProps">
-        <div class="flex justify-between items-center w-full p-1">
+        <div class="flex w-full items-center justify-between p-1">
           <div class="flex items-center gap-2">
             <template v-if="slotProps.option.value === 'nightly'">
               <div class="w-4"></div>
@@ -45,7 +45,7 @@
                   value: slotProps.option.conflictMessage,
                   showDelay: 300
                 }"
-                class="pi pi-exclamation-triangle text-yellow-500"
+                class="icon-[lucide--triangle-alert] text-warning-background"
               />
               <VerifiedIcon v-else :size="20" class="relative right-0.5" />
             </template>
@@ -59,29 +59,29 @@
       </template>
     </Listbox>
     <ContentDivider class="my-2" />
-    <div class="flex justify-end gap-2 py-1 px-3">
+    <div class="flex justify-end gap-2 px-3 py-1">
       <Button
-        text
+        variant="muted-textonly"
         class="text-sm"
-        severity="secondary"
-        :label="$t('g.cancel')"
         :disabled="isQueueing"
         @click="emit('cancel')"
-      />
+      >
+        {{ $t('g.cancel') }}
+      </Button>
       <Button
-        severity="secondary"
-        :label="$t('g.install')"
-        class="py-2.5 px-4 text-sm dark-theme:bg-unset bg-black/80 dark-theme:text-unset text-neutral-100 rounded-lg"
+        variant="secondary"
+        class="rounded-lg bg-secondary-background px-4 py-2.5 text-sm text-base-foreground"
         :disabled="isQueueing"
         @click="handleSubmit"
-      />
+      >
+        {{ $t('g.install') }}
+      </Button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { whenever } from '@vueuse/core'
-import Button from 'primevue/button'
 import Listbox from 'primevue/listbox'
 import ProgressSpinner from 'primevue/progressspinner'
 import { valid as validSemver } from 'semver'
@@ -91,12 +91,13 @@ import { useI18n } from 'vue-i18n'
 import ContentDivider from '@/components/common/ContentDivider.vue'
 import NoResultsPlaceholder from '@/components/common/NoResultsPlaceholder.vue'
 import VerifiedIcon from '@/components/icons/VerifiedIcon.vue'
-import { useConflictDetection } from '@/composables/useConflictDetection'
+import Button from '@/components/ui/button/Button.vue'
 import { useComfyRegistryService } from '@/services/comfyRegistryService'
 import type { components } from '@/types/comfyRegistryTypes'
-import { getJoinedConflictMessages } from '@/utils/conflictMessageUtil'
+import { useConflictDetection } from '@/workbench/extensions/manager/composables/useConflictDetection'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
 import type { components as ManagerComponents } from '@/workbench/extensions/manager/types/generatedManagerTypes'
+import { getJoinedConflictMessages } from '@/workbench/extensions/manager/utils/conflictMessageUtil'
 
 type ManagerChannel = ManagerComponents['schemas']['ManagerChannel']
 type ManagerDatabaseSource =
@@ -236,7 +237,7 @@ const handleSubmit = async () => {
   // Convert 'latest' to actual version number for installation
   const actualVersion =
     selectedVersion.value === 'latest'
-      ? nodePack.latest_version?.version ?? 'latest'
+      ? (nodePack.latest_version?.version ?? 'latest')
       : selectedVersion.value
 
   await managerStore.installPack.call({

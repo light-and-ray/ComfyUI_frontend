@@ -1,83 +1,125 @@
 <template>
-  <div v-if="renderError" class="node-error p-4 text-red-500 text-sm">
-    {{ $t('Node Header Error') }}
+  <div v-if="renderError" class="node-error p-4 text-red-500">
+    {{ st('nodeErrors.header', 'Node Header Error') }}
   </div>
   <div
     v-else
-    class="lg-node-header flex items-center justify-between p-4 rounded-t-2xl cursor-move w-full"
+    :class="
+      cn(
+        'lg-node-header text-sm py-2 pl-2 pr-3 w-full min-w-0',
+        'text-node-component-header bg-node-component-header-surface',
+        headerShapeClass
+      )
+    "
+    :style="headerStyle"
     :data-testid="`node-header-${nodeData?.id || ''}`"
     @dblclick="handleDoubleClick"
   >
-    <!-- Collapse/Expand Button -->
-    <button
-      v-show="!readonly"
-      class="bg-transparent border-transparent flex items-center"
-      data-testid="node-collapse-button"
-      @click.stop="handleCollapse"
-      @dblclick.stop
-    >
-      <i
-        :class="collapsed ? 'pi pi-chevron-right' : 'pi pi-chevron-down'"
-        class="text-xs leading-none relative top-px text-stone-200 dark-theme:text-slate-300"
-      ></i>
-    </button>
+    <div class="flex items-center justify-between gap-2.5 min-w-0">
+      <!-- Collapse/Expand Button -->
+      <div class="relative grow-1 flex items-center gap-2.5 min-w-0 flex-1">
+        <div class="flex shrink-0 items-center px-0.5">
+          <Button
+            size="icon-sm"
+            variant="textonly"
+            class="hover:bg-transparent"
+            data-testid="node-collapse-button"
+            @click.stop="handleCollapse"
+            @dblclick.stop
+          >
+            <i
+              :class="
+                cn(
+                  'icon-[lucide--chevron-down] size-5 transition-transform',
+                  collapsed && '-rotate-90'
+                )
+              "
+              class="text-node-component-header-icon"
+            />
+          </Button>
+        </div>
 
-    <!-- Node Title -->
-    <div
-      v-tooltip.top="tooltipConfig"
-      class="text-sm font-bold truncate flex-1"
-      data-testid="node-title"
-    >
-      <EditableText
-        :model-value="displayTitle"
-        :is-editing="isEditing"
-        :input-attrs="{ 'data-testid': 'node-title-input' }"
-        @edit="handleTitleEdit"
-        @cancel="handleTitleCancel"
-      />
-    </div>
+        <div v-if="isSubgraphNode" class="icon-[comfy--workflow] size-4" />
+        <div v-if="isApiNode" class="icon-[lucide--component] size-4" />
 
-    <!-- Title Buttons -->
-    <div v-if="!readonly" class="flex items-center">
-      <IconButton
-        v-if="isSubgraphNode"
-        size="sm"
-        type="transparent"
-        class="text-stone-200 dark-theme:text-slate-300"
-        data-testid="subgraph-enter-button"
-        title="Enter Subgraph"
-        @click.stop="handleEnterSubgraph"
-        @dblclick.stop
-      >
-        <i class="pi pi-external-link"></i>
-      </IconButton>
+        <!-- Node Title -->
+        <div
+          v-tooltip.top="tooltipConfig"
+          class="flex min-w-0 flex-1 items-center gap-2"
+          data-testid="node-title"
+        >
+          <div class="truncate min-w-0 flex-1">
+            <EditableText
+              :model-value="displayTitle"
+              :is-editing="isEditing"
+              :input-attrs="{ 'data-testid': 'node-title-input' }"
+              @edit="handleTitleEdit"
+              @cancel="handleTitleCancel"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex shrink-0 items-center justify-between gap-2">
+        <NodeBadge
+          v-for="badge of nodeBadges"
+          :key="badge.text"
+          v-bind="badge"
+        />
+        <NodeBadge v-if="statusBadge" v-bind="statusBadge" />
+        <i-comfy:pin
+          v-if="isPinned"
+          class="size-5"
+          data-testid="node-pin-indicator"
+        />
+        <Button
+          v-if="isSubgraphNode"
+          v-tooltip.top="enterSubgraphTooltipConfig"
+          variant="textonly"
+          size="sm"
+          data-testid="subgraph-enter-button"
+          class="text-node-component-header h-5 px-0.5"
+          @click.stop="handleEnterSubgraph"
+          @dblclick.stop
+        >
+          <span>{{ $t('g.edit') }}</span>
+          <i class="icon-[lucide--scaling] size-5" />
+        </Button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { type Ref, computed, inject, onErrorCaptured, ref, watch } from 'vue'
+import { computed, onErrorCaptured, ref, toValue, watch } from 'vue'
 
-import IconButton from '@/components/button/IconButton.vue'
 import EditableText from '@/components/common/EditableText.vue'
+import Button from '@/components/ui/button/Button.vue'
 import type { VueNodeData } from '@/composables/graph/useGraphNodeManager'
 import { useErrorHandling } from '@/composables/useErrorHandling'
+import { st } from '@/i18n'
+import { LGraphEventMode, RenderShape } from '@/lib/litegraph/src/litegraph'
+import { useSettingStore } from '@/platform/settings/settingStore'
+import NodeBadge from '@/renderer/extensions/vueNodes/components/NodeBadge.vue'
 import { useNodeTooltips } from '@/renderer/extensions/vueNodes/composables/useNodeTooltips'
-import type { LODLevel } from '@/renderer/extensions/vueNodes/lod/useLOD'
+import { applyLightThemeColor } from '@/renderer/extensions/vueNodes/utils/nodeStyleUtils'
 import { app } from '@/scripts/app'
+import { useColorPaletteStore } from '@/stores/workspace/colorPaletteStore'
+import { normalizeI18nKey } from '@/utils/formatUtil'
 import {
   getLocatorIdFromNodeData,
   getNodeByLocatorId
 } from '@/utils/graphTraversalUtil'
+import { cn } from '@/utils/tailwindUtil'
+
+import type { NodeBadgeProps } from './NodeBadge.vue'
 
 interface NodeHeaderProps {
   nodeData?: VueNodeData
-  readonly?: boolean
-  lodLevel?: LODLevel
   collapsed?: boolean
 }
 
-const { nodeData, readonly, collapsed } = defineProps<NodeHeaderProps>()
+const { nodeData, collapsed } = defineProps<NodeHeaderProps>()
 
 const emit = defineEmits<{
   collapse: []
@@ -98,30 +140,106 @@ onErrorCaptured((error) => {
 // Editing state
 const isEditing = ref(false)
 
-const tooltipContainer =
-  inject<Ref<HTMLElement | undefined>>('tooltipContainer')
 const { getNodeDescription, createTooltipConfig } = useNodeTooltips(
-  nodeData?.type || '',
-  tooltipContainer
+  nodeData?.type || ''
 )
 
 const tooltipConfig = computed(() => {
-  if (readonly || isEditing.value) {
+  if (isEditing.value) {
     return { value: '', disabled: true }
   }
   const description = getNodeDescription.value
   return createTooltipConfig(description)
 })
 
+const enterSubgraphTooltipConfig = computed(() => {
+  return createTooltipConfig(st('enterSubgraph', 'Enter Subgraph'))
+})
+
+const headerStyle = computed(() => {
+  const colorPaletteStore = useColorPaletteStore()
+
+  const opacity = useSettingStore().get('Comfy.Node.Opacity') ?? 1
+
+  if (!nodeData?.color) {
+    return { backgroundColor: '', opacity }
+  }
+
+  const headerColor = applyLightThemeColor(
+    nodeData.color,
+    Boolean(colorPaletteStore.completedActivePalette.light_theme)
+  )
+
+  return { backgroundColor: headerColor, opacity }
+})
+
 const resolveTitle = (info: VueNodeData | undefined) => {
   const title = (info?.title ?? '').trim()
   if (title.length > 0) return title
-  const type = (info?.type ?? '').trim()
-  return type.length > 0 ? type : 'Untitled'
+
+  const nodeType = (info?.type ?? '').trim() || 'Untitled'
+  const key = `nodeDefs.${normalizeI18nKey(nodeType)}.display_name`
+  return st(key, nodeType)
 }
 
 // Local state for title to provide immediate feedback
 const displayTitle = ref(resolveTitle(nodeData))
+
+const bypassed = computed(
+  (): boolean => nodeData?.mode === LGraphEventMode.BYPASS
+)
+const muted = computed((): boolean => nodeData?.mode === LGraphEventMode.NEVER)
+
+const statusBadge = computed((): NodeBadgeProps | undefined =>
+  muted.value
+    ? { text: 'Muted', cssIcon: 'icon-[lucide--ban]' }
+    : bypassed.value
+      ? { text: 'Bypassed', cssIcon: 'icon-[lucide--redo-dot]' }
+      : undefined
+)
+
+const nodeBadges = computed<NodeBadgeProps[]>(() =>
+  [...(nodeData?.badges ?? [])].map(toValue)
+)
+const isPinned = computed(() => Boolean(nodeData?.flags?.pinned))
+const isApiNode = computed(() => Boolean(nodeData?.apiNode))
+
+const headerShapeClass = computed(() => {
+  if (collapsed) {
+    switch (nodeData?.shape) {
+      case RenderShape.BOX:
+        return 'rounded-none'
+      case RenderShape.CARD:
+        return 'rounded-tl-2xl rounded-br-2xl rounded-tr-none rounded-bl-none'
+      default:
+        return 'rounded-2xl'
+    }
+  }
+  switch (nodeData?.shape) {
+    case RenderShape.BOX:
+      return 'rounded-t-none'
+    case RenderShape.CARD:
+      return 'rounded-tl-2xl rounded-tr-none'
+    default:
+      return 'rounded-t-2xl'
+  }
+})
+
+// Subgraph detection
+const isSubgraphNode = computed(() => {
+  if (!nodeData?.id) return false
+
+  // Get the underlying LiteGraph node
+  const graph = app.rootGraph
+  if (!graph) return false
+
+  const locatorId = getLocatorIdFromNodeData(nodeData)
+
+  const litegraphNode = getNodeByLocatorId(graph, locatorId)
+
+  // Use the official type guard method
+  return litegraphNode?.isSubgraphNode() ?? false
+})
 
 // Watch for external changes to the node title or type
 watch(
@@ -134,31 +252,13 @@ watch(
   }
 )
 
-// Subgraph detection
-const isSubgraphNode = computed(() => {
-  if (!nodeData?.id) return false
-
-  // Get the underlying LiteGraph node
-  const graph = app.graph?.rootGraph || app.graph
-  if (!graph) return false
-
-  const locatorId = getLocatorIdFromNodeData(nodeData)
-
-  const litegraphNode = getNodeByLocatorId(graph, locatorId)
-
-  // Use the official type guard method
-  return litegraphNode?.isSubgraphNode() ?? false
-})
-
 // Event handlers
 const handleCollapse = () => {
   emit('collapse')
 }
 
 const handleDoubleClick = () => {
-  if (!readonly) {
-    isEditing.value = true
-  }
+  isEditing.value = true
 }
 
 const handleTitleEdit = (newTitle: string) => {

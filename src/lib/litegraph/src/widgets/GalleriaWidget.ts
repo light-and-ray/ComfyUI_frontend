@@ -1,9 +1,8 @@
+import { t } from '@/i18n'
+
 import type { IGalleriaWidget } from '../types/widgets'
-import {
-  BaseWidget,
-  type DrawWidgetOptions,
-  type WidgetEventOptions
-} from './BaseWidget'
+import { BaseWidget } from './BaseWidget'
+import type { DrawWidgetOptions, WidgetEventOptions } from './BaseWidget'
 
 /**
  * Widget for displaying image galleries
@@ -32,7 +31,7 @@ export class GalleriaWidget
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
-    const text = 'Galleria: Vue-only'
+    const text = `Galleria: ${t('widgets.node2only')}`
     ctx.fillText(text, width / 2, y + height / 2)
 
     Object.assign(ctx, {

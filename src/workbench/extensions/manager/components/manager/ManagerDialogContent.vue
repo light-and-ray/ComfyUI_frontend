@@ -1,60 +1,68 @@
 <template>
   <div
-    class="h-full flex flex-col mx-auto overflow-hidden"
+    class="mx-auto flex h-full flex-col overflow-hidden"
     :aria-label="$t('manager.title')"
   >
     <ContentDivider :width="0.3" />
     <Button
       v-if="isSmallScreen"
-      :icon="isSideNavOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"
-      severity="secondary"
-      filled
-      class="absolute top-1/2 -translate-y-1/2 z-10"
-      :class="isSideNavOpen ? 'left-[12rem]' : 'left-2'"
+      variant="secondary"
+      size="icon"
+      :class="
+        cn(
+          'absolute top-1/2 z-10 -translate-y-1/2',
+          isSideNavOpen ? 'left-[12rem]' : 'left-2'
+        )
+      "
       @click="toggleSideNav"
-    />
-    <div class="flex flex-1 relative overflow-hidden">
+    >
+      <i
+        :class="isSideNavOpen ? 'pi pi-chevron-left' : 'pi pi-chevron-right'"
+      />
+    </Button>
+    <div class="relative flex flex-1 overflow-hidden">
       <ManagerNavSidebar
         v-if="isSideNavOpen"
         v-model:selected-tab="selectedTab"
         :tabs="tabs"
       />
       <div
-        class="flex-1 overflow-auto bg-gray-50 dark-theme:bg-neutral-900"
+        class="flex-1 overflow-auto bg-base-background"
         :class="{
           'transition-all duration-300': isSmallScreen
         }"
       >
-        <div class="px-6 flex flex-col h-full">
+        <div class="flex h-full flex-col px-6">
           <!-- Conflict Warning Banner -->
           <div
             v-if="shouldShowManagerBanner"
-            class="bg-yellow-500/20 rounded-lg p-4 mt-3 mb-4 flex items-center gap-6 relative"
+            class="relative mt-3 mb-4 flex items-center gap-6 rounded-lg bg-yellow-500/20 p-4"
           >
-            <i class="pi pi-exclamation-triangle text-yellow-600 text-lg"></i>
-            <div class="flex flex-col gap-2 flex-1">
-              <p class="text-sm font-bold m-0">
+            <i
+              class="icon-[lucide--triangle-alert] text-lg text-warning-background"
+            />
+            <div class="flex flex-1 flex-col gap-2">
+              <p class="m-0 text-sm font-bold">
                 {{ $t('manager.conflicts.warningBanner.title') }}
               </p>
-              <p class="text-xs m-0">
+              <p class="m-0 text-xs">
                 {{ $t('manager.conflicts.warningBanner.message') }}
               </p>
               <p
-                class="text-sm font-bold m-0 cursor-pointer"
+                class="m-0 cursor-pointer text-sm font-bold"
                 @click="onClickWarningLink"
               >
                 {{ $t('manager.conflicts.warningBanner.button') }}
               </p>
             </div>
-            <IconButton
+            <Button
               class="absolute top-0 right-0"
-              type="transparent"
+              variant="textonly"
+              size="icon"
               @click="dismissWarningBanner"
             >
-              <i
-                class="pi pi-times text-neutral-900 dark-theme:text-white text-xs"
-              ></i>
-            </IconButton>
+              <i class="pi pi-times text-xs text-base-foreground"></i>
+            </Button>
           </div>
           <RegistrySearchBar
             v-model:search-query="searchQuery"
@@ -69,7 +77,7 @@
           <div class="flex-1 overflow-auto">
             <div
               v-if="isLoading"
-              class="w-full h-full overflow-auto scrollbar-hide"
+              class="h-full scrollbar-hide w-full overflow-auto"
             >
               <GridSkeleton :grid-style="GRID_STYLE" :skeleton-card-count />
             </div>
@@ -110,9 +118,9 @@
           </div>
         </div>
       </div>
-      <div class="w-[clamp(250px,33%,306px)] border-l-0 flex z-20">
+      <div class="z-20 flex w-[clamp(250px,33%,306px)] border-l-0">
         <ContentDivider orientation="vertical" :width="0.2" />
-        <div class="w-full flex flex-col isolate">
+        <div class="isolate flex w-full flex-col">
           <InfoPanel
             v-if="!hasMultipleSelections && selectedNodePack"
             :node-pack="selectedNodePack"
@@ -127,7 +135,6 @@
 <script setup lang="ts">
 import { whenever } from '@vueuse/core'
 import { merge } from 'es-toolkit/compat'
-import Button from 'primevue/button'
 import {
   computed,
   onBeforeUnmount,
@@ -139,25 +146,27 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import IconButton from '@/components/button/IconButton.vue'
 import ContentDivider from '@/components/common/ContentDivider.vue'
 import NoResultsPlaceholder from '@/components/common/NoResultsPlaceholder.vue'
 import VirtualGrid from '@/components/common/VirtualGrid.vue'
+import Button from '@/components/ui/button/Button.vue'
 import { useResponsiveCollapse } from '@/composables/element/useResponsiveCollapse'
-import { useInstalledPacks } from '@/composables/nodePack/useInstalledPacks'
-import { usePackUpdateStatus } from '@/composables/nodePack/usePackUpdateStatus'
-import { useWorkflowPacks } from '@/composables/nodePack/useWorkflowPacks'
-import { useConflictAcknowledgment } from '@/composables/useConflictAcknowledgment'
-import { useRegistrySearch } from '@/composables/useRegistrySearch'
+import { useExternalLink } from '@/composables/useExternalLink'
 import { useComfyRegistryStore } from '@/stores/comfyRegistryStore'
 import type { components } from '@/types/comfyRegistryTypes'
+import { cn } from '@/utils/tailwindUtil'
 import ManagerNavSidebar from '@/workbench/extensions/manager/components/manager/ManagerNavSidebar.vue'
 import InfoPanel from '@/workbench/extensions/manager/components/manager/infoPanel/InfoPanel.vue'
 import InfoPanelMultiItem from '@/workbench/extensions/manager/components/manager/infoPanel/InfoPanelMultiItem.vue'
 import PackCard from '@/workbench/extensions/manager/components/manager/packCard/PackCard.vue'
 import RegistrySearchBar from '@/workbench/extensions/manager/components/manager/registrySearchBar/RegistrySearchBar.vue'
 import GridSkeleton from '@/workbench/extensions/manager/components/manager/skeleton/GridSkeleton.vue'
+import { useInstalledPacks } from '@/workbench/extensions/manager/composables/nodePack/useInstalledPacks'
+import { usePackUpdateStatus } from '@/workbench/extensions/manager/composables/nodePack/usePackUpdateStatus'
+import { useWorkflowPacks } from '@/workbench/extensions/manager/composables/nodePack/useWorkflowPacks'
+import { useConflictAcknowledgment } from '@/workbench/extensions/manager/composables/useConflictAcknowledgment'
 import { useManagerStatePersistence } from '@/workbench/extensions/manager/composables/useManagerStatePersistence'
+import { useRegistrySearch } from '@/workbench/extensions/manager/composables/useRegistrySearch'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
 import type { TabItem } from '@/workbench/extensions/manager/types/comfyManagerTypes'
 import { ManagerTab } from '@/workbench/extensions/manager/types/comfyManagerTypes'
@@ -167,6 +176,7 @@ const { initialTab } = defineProps<{
 }>()
 
 const { t } = useI18n()
+const { buildDocsUrl } = useExternalLink()
 const comfyManagerStore = useComfyManagerStore()
 const { getPackById } = useComfyRegistryStore()
 const conflictAcknowledgment = useConflictAcknowledgment()
@@ -358,7 +368,9 @@ watch([isAllTab, searchResults], () => {
 
 const onClickWarningLink = () => {
   window.open(
-    'https://docs.comfy.org/troubleshooting/custom-node-issues',
+    buildDocsUrl('/troubleshooting/custom-node-issues', {
+      includeLocale: true
+    }),
     '_blank'
   )
 }

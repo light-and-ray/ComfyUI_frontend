@@ -2,210 +2,293 @@
  * Vue node lifecycle management for LiteGraph integration
  * Provides event-driven reactivity with performance optimizations
  */
-import { nextTick, reactive } from 'vue'
+import { reactiveComputed } from '@vueuse/core'
+import { customRef, reactive, shallowReactive } from 'vue'
 
 import { useChainCallback } from '@/composables/functional/useChainCallback'
+import { isProxyWidget } from '@/core/graph/subgraph/proxyWidget'
+import type {
+  INodeInputSlot,
+  INodeOutputSlot
+} from '@/lib/litegraph/src/interfaces'
+import type {
+  IBaseWidget,
+  IWidgetOptions
+} from '@/lib/litegraph/src/types/widgets'
 import { useLayoutMutations } from '@/renderer/core/layout/operations/layoutMutations'
 import { LayoutSource } from '@/renderer/core/layout/types'
-import { type Bounds, QuadTree } from '@/renderer/core/spatial/QuadTree'
-import type { WidgetValue } from '@/types/simplifiedWidget'
-import type { SpatialIndexDebugInfo } from '@/types/spatialIndex'
+import type { NodeId } from '@/renderer/core/layout/types'
+import type { InputSpec } from '@/schemas/nodeDef/nodeDefSchemaV2'
+import { isDOMWidget } from '@/scripts/domWidget'
+import { useNodeDefStore } from '@/stores/nodeDefStore'
+import type { WidgetValue, SafeControlWidget } from '@/types/simplifiedWidget'
+import { normalizeControlOption } from '@/types/simplifiedWidget'
 
-import type { LGraph, LGraphNode } from '../../lib/litegraph/src/litegraph'
+import type {
+  LGraph,
+  LGraphBadge,
+  LGraphNode,
+  LGraphTriggerAction,
+  LGraphTriggerEvent,
+  LGraphTriggerParam
+} from '@/lib/litegraph/src/litegraph'
+import type { TitleMode } from '@/lib/litegraph/src/types/globalEnums'
+import { NodeSlotType } from '@/lib/litegraph/src/types/globalEnums'
+import { app } from '@/scripts/app'
 
-export interface NodeState {
-  visible: boolean
-  dirty: boolean
-  lastUpdate: number
-  culled: boolean
-}
-
-interface NodeMetadata {
-  lastRenderTime: number
-  cachedBounds: DOMRect | null
-  lodLevel: 'high' | 'medium' | 'low'
-  spatialIndex?: QuadTree<string>
-}
-
-interface PerformanceMetrics {
-  fps: number
-  frameTime: number
-  updateTime: number
-  nodeCount: number
-  culledCount: number
-  callbackUpdateCount: number
-  rafUpdateCount: number
-  adaptiveQuality: boolean
+export interface WidgetSlotMetadata {
+  index: number
+  linked: boolean
 }
 
 export interface SafeWidgetData {
   name: string
   type: string
   value: WidgetValue
-  options?: Record<string, unknown>
+  borderStyle?: string
   callback?: ((value: unknown) => void) | undefined
+  controlWidget?: SafeControlWidget
+  hasLayoutSize?: boolean
+  isDOMWidget?: boolean
+  label?: string
+  nodeType?: string
+  options?: IWidgetOptions<unknown>
+  spec?: InputSpec
+  slotMetadata?: WidgetSlotMetadata
 }
 
 export interface VueNodeData {
-  id: string
-  title: string
-  type: string
+  executing: boolean
+  id: NodeId
   mode: number
   selected: boolean
-  executing: boolean
-  subgraphId?: string | null
-  widgets?: SafeWidgetData[]
-  inputs?: unknown[]
-  outputs?: unknown[]
-  hasErrors?: boolean
+  title: string
+  type: string
+  apiNode?: boolean
+  badges?: (LGraphBadge | (() => LGraphBadge))[]
+  bgcolor?: string
+  color?: string
   flags?: {
     collapsed?: boolean
+    pinned?: boolean
   }
+  hasErrors?: boolean
+  inputs?: INodeInputSlot[]
+  outputs?: INodeOutputSlot[]
+  resizable?: boolean
+  shape?: number
+  subgraphId?: string | null
+  titleMode?: TitleMode
+  widgets?: SafeWidgetData[]
 }
 
-interface SpatialMetrics {
-  queryTime: number
-  nodesInIndex: number
-}
-
-interface GraphNodeManager {
+export interface GraphNodeManager {
   // Reactive state - safe data extracted from LiteGraph nodes
   vueNodeData: ReadonlyMap<string, VueNodeData>
-  nodeState: ReadonlyMap<string, NodeState>
-  nodePositions: ReadonlyMap<string, { x: number; y: number }>
-  nodeSizes: ReadonlyMap<string, { width: number; height: number }>
 
   // Access to original LiteGraph nodes (non-reactive)
   getNode(id: string): LGraphNode | undefined
 
   // Lifecycle methods
-  setupEventListeners(): () => void
   cleanup(): void
-
-  // Update methods
-  scheduleUpdate(
-    nodeId?: string,
-    priority?: 'critical' | 'normal' | 'low'
-  ): void
-  forceSync(): void
-  detectChangesInRAF(): void
-
-  // Spatial queries
-  getVisibleNodeIds(viewportBounds: Bounds): Set<string>
-
-  // Performance
-  performanceMetrics: PerformanceMetrics
-  spatialMetrics: SpatialMetrics
-
-  // Debug
-  getSpatialIndexDebugInfo(): SpatialIndexDebugInfo | null
 }
 
-export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
+function widgetWithVueTrack(
+  widget: IBaseWidget
+): asserts widget is IBaseWidget & { vueTrack: () => void } {
+  if (widget.vueTrack) return
+
+  customRef((track, trigger) => {
+    widget.callback = useChainCallback(widget.callback, trigger)
+    widget.vueTrack = track
+    return { get() {}, set() {} }
+  })
+}
+export function useReactiveWidgetValue(widget: IBaseWidget) {
+  widgetWithVueTrack(widget)
+  widget.vueTrack()
+  return widget.value
+}
+
+function getControlWidget(widget: IBaseWidget): SafeControlWidget | undefined {
+  const cagWidget = widget.linkedWidgets?.find(
+    (w) => w.name == 'control_after_generate'
+  )
+  if (!cagWidget) return
+  return {
+    value: normalizeControlOption(cagWidget.value),
+    update: (value) => (cagWidget.value = normalizeControlOption(value))
+  }
+}
+function getNodeType(node: LGraphNode, widget: IBaseWidget) {
+  if (!node.isSubgraphNode() || !isProxyWidget(widget)) return undefined
+  const subNode = node.subgraph.getNodeById(widget._overlay.nodeId)
+  return subNode?.type
+}
+
+/**
+ * Validates that a value is a valid WidgetValue type
+ */
+const normalizeWidgetValue = (value: unknown): WidgetValue => {
+  if (value === null || value === undefined || value === void 0) {
+    return undefined
+  }
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value
+  }
+  if (typeof value === 'object') {
+    // Check if it's a File array
+    if (
+      Array.isArray(value) &&
+      value.length > 0 &&
+      value.every((item): item is File => item instanceof File)
+    ) {
+      return value
+    }
+    // Otherwise it's a generic object
+    return value
+  }
+  // If none of the above, return undefined
+  console.warn(`Invalid widget value type: ${typeof value}`, value)
+  return undefined
+}
+
+export function safeWidgetMapper(
+  node: LGraphNode,
+  slotMetadata: Map<string, WidgetSlotMetadata>
+): (widget: IBaseWidget) => SafeWidgetData {
+  const nodeDefStore = useNodeDefStore()
+  return function (widget) {
+    try {
+      const spec = nodeDefStore.getInputSpecForWidget(node, widget.name)
+      const slotInfo = slotMetadata.get(widget.name)
+      const borderStyle = widget.promoted
+        ? 'ring ring-component-node-widget-promoted'
+        : widget.advanced
+          ? 'ring ring-component-node-widget-advanced'
+          : undefined
+      const callback = (v: unknown) => {
+        const value = normalizeWidgetValue(v)
+        widget.value = value ?? undefined
+        // Match litegraph callback signature: (value, canvas, node, pos, event)
+        // Some extensions (e.g., Impact Pack) expect node as the 3rd parameter
+        widget.callback?.(value, app.canvas, node)
+        // Trigger redraw for all legacy widgets on this node (e.g., mask preview)
+        // This ensures widgets that depend on other widget values get updated
+        node.widgets?.forEach((w) => w.triggerDraw?.())
+      }
+
+      return {
+        name: widget.name,
+        type: widget.type,
+        value: useReactiveWidgetValue(widget),
+        borderStyle,
+        callback,
+        controlWidget: getControlWidget(widget),
+        hasLayoutSize: typeof widget.computeLayoutSize === 'function',
+        isDOMWidget: isDOMWidget(widget),
+        label: widget.label,
+        nodeType: getNodeType(node, widget),
+        options: widget.options,
+        spec,
+        slotMetadata: slotInfo
+      }
+    } catch (error) {
+      return {
+        name: widget.name || 'unknown',
+        type: widget.type || 'text',
+        value: undefined
+      }
+    }
+  }
+}
+
+export function isValidWidgetValue(value: unknown): value is WidgetValue {
+  return (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'object'
+  )
+}
+
+export function useGraphNodeManager(graph: LGraph): GraphNodeManager {
   // Get layout mutations composable
-  const { moveNode, resizeNode, createNode, deleteNode, setSource } =
-    useLayoutMutations()
+  const { createNode, deleteNode, setSource } = useLayoutMutations()
   // Safe reactive data extracted from LiteGraph nodes
   const vueNodeData = reactive(new Map<string, VueNodeData>())
-  const nodeState = reactive(new Map<string, NodeState>())
-  const nodePositions = reactive(new Map<string, { x: number; y: number }>())
-  const nodeSizes = reactive(
-    new Map<string, { width: number; height: number }>()
-  )
 
   // Non-reactive storage for original LiteGraph nodes
   const nodeRefs = new Map<string, LGraphNode>()
 
-  // WeakMap for heavy data that auto-GCs when nodes are removed
-  const nodeMetadata = new WeakMap<LGraphNode, NodeMetadata>()
+  const refreshNodeSlots = (nodeId: string) => {
+    const nodeRef = nodeRefs.get(nodeId)
+    const currentData = vueNodeData.get(nodeId)
 
-  // Performance tracking
-  const performanceMetrics = reactive<PerformanceMetrics>({
-    fps: 0,
-    frameTime: 0,
-    updateTime: 0,
-    nodeCount: 0,
-    culledCount: 0,
-    callbackUpdateCount: 0,
-    rafUpdateCount: 0,
-    adaptiveQuality: false
-  })
+    if (!nodeRef || !currentData) return
 
-  // Spatial indexing using QuadTree
-  const spatialIndex = new QuadTree<string>(
-    { x: -10000, y: -10000, width: 20000, height: 20000 },
-    { maxDepth: 6, maxItemsPerNode: 4 }
-  )
-  let lastSpatialQueryTime = 0
+    // Only extract slot-related data instead of full node re-extraction
+    const slotMetadata = new Map<string, WidgetSlotMetadata>()
 
-  // Spatial metrics
-  const spatialMetrics = reactive<SpatialMetrics>({
-    queryTime: 0,
-    nodesInIndex: 0
-  })
-
-  // Update batching
-  const pendingUpdates = new Set<string>()
-  const criticalUpdates = new Set<string>()
-  const lowPriorityUpdates = new Set<string>()
-  let updateScheduled = false
-  let batchTimeoutId: number | null = null
-
-  // Change detection state
-  const lastNodesSnapshot = new Map<
-    string,
-    { pos: [number, number]; size: [number, number] }
-  >()
-
-  const attachMetadata = (node: LGraphNode) => {
-    nodeMetadata.set(node, {
-      lastRenderTime: performance.now(),
-      cachedBounds: null,
-      lodLevel: 'high',
-      spatialIndex: undefined
+    nodeRef.inputs?.forEach((input, index) => {
+      if (!input?.widget?.name) return
+      slotMetadata.set(input.widget.name, {
+        index,
+        linked: input.link != null
+      })
     })
+
+    // Update only widgets with new slot metadata, keeping other widget data intact
+    for (const widget of currentData.widgets ?? []) {
+      const slotInfo = slotMetadata.get(widget.name)
+      if (slotInfo) widget.slotMetadata = slotInfo
+    }
   }
 
   // Extract safe data from LiteGraph node for Vue consumption
-  const extractVueNodeData = (node: LGraphNode): VueNodeData => {
+  function extractVueNodeData(node: LGraphNode): VueNodeData {
     // Determine subgraph ID - null for root graph, string for subgraphs
     const subgraphId =
       node.graph && 'id' in node.graph && node.graph !== node.graph.rootGraph
         ? String(node.graph.id)
         : null
     // Extract safe widget data
-    const safeWidgets = node.widgets?.map((widget) => {
-      try {
-        // TODO: Use widget.getReactiveData() once TypeScript types are updated
-        let value = widget.value
+    const slotMetadata = new Map<string, WidgetSlotMetadata>()
 
-        // For combo widgets, if value is undefined, use the first option as default
-        if (
-          value === undefined &&
-          widget.type === 'combo' &&
-          widget.options?.values &&
-          Array.isArray(widget.options.values) &&
-          widget.options.values.length > 0
-        ) {
-          value = widget.options.values[0]
-        }
-
-        return {
-          name: widget.name,
-          type: widget.type,
-          value: value,
-          options: widget.options ? { ...widget.options } : undefined,
-          callback: widget.callback
-        }
-      } catch (error) {
-        return {
-          name: widget.name || 'unknown',
-          type: widget.type || 'text',
-          value: undefined, // Already a valid WidgetValue
-          options: undefined,
-          callback: undefined
-        }
+    const reactiveWidgets = shallowReactive<IBaseWidget[]>(node.widgets ?? [])
+    Object.defineProperty(node, 'widgets', {
+      get() {
+        return reactiveWidgets
+      },
+      set(v) {
+        reactiveWidgets.splice(0, reactiveWidgets.length, ...v)
       }
+    })
+    const reactiveInputs = shallowReactive<INodeInputSlot[]>(node.inputs ?? [])
+    Object.defineProperty(node, 'inputs', {
+      get() {
+        return reactiveInputs
+      },
+      set(v) {
+        reactiveInputs.splice(0, reactiveInputs.length, ...v)
+      }
+    })
+
+    const safeWidgets = reactiveComputed<SafeWidgetData[]>(() => {
+      node.inputs?.forEach((input, index) => {
+        if (!input?.widget?.name) return
+        slotMetadata.set(input.widget.name, {
+          index,
+          linked: input.link != null
+        })
+      })
+      return node.widgets?.map(safeWidgetMapper(node, slotMetadata)) ?? []
     })
 
     const nodeType =
@@ -215,210 +298,35 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
       node.constructor?.name ||
       'Unknown'
 
+    const apiNode = node.constructor?.nodeData?.api_node ?? false
+    const badges = node.badges
+
     return {
       id: String(node.id),
       title: typeof node.title === 'string' ? node.title : '',
       type: nodeType,
       mode: node.mode || 0,
+      titleMode: node.title_mode,
       selected: node.selected || false,
       executing: false, // Will be updated separately based on execution state
       subgraphId,
+      apiNode,
+      badges,
       hasErrors: !!node.has_errors,
       widgets: safeWidgets,
-      inputs: node.inputs ? [...node.inputs] : undefined,
+      inputs: reactiveInputs,
       outputs: node.outputs ? [...node.outputs] : undefined,
-      flags: node.flags ? { ...node.flags } : undefined
+      flags: node.flags ? { ...node.flags } : undefined,
+      color: node.color || undefined,
+      bgcolor: node.bgcolor || undefined,
+      resizable: node.resizable,
+      shape: node.shape
     }
   }
 
   // Get access to original LiteGraph node (non-reactive)
   const getNode = (id: string): LGraphNode | undefined => {
     return nodeRefs.get(id)
-  }
-
-  /**
-   * Validates that a value is a valid WidgetValue type
-   */
-  const validateWidgetValue = (value: unknown): WidgetValue => {
-    if (value === null || value === undefined || value === void 0) {
-      return undefined
-    }
-    if (
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
-      return value
-    }
-    if (typeof value === 'object') {
-      // Check if it's a File array
-      if (
-        Array.isArray(value) &&
-        value.length > 0 &&
-        value.every((item): item is File => item instanceof File)
-      ) {
-        return value
-      }
-      // Otherwise it's a generic object
-      return value
-    }
-    // If none of the above, return undefined
-    console.warn(`Invalid widget value type: ${typeof value}`, value)
-    return undefined
-  }
-
-  /**
-   * Updates Vue state when widget values change
-   */
-  const updateVueWidgetState = (
-    nodeId: string,
-    widgetName: string,
-    value: unknown
-  ): void => {
-    try {
-      const currentData = vueNodeData.get(nodeId)
-      if (!currentData?.widgets) return
-
-      const updatedWidgets = currentData.widgets.map((w) =>
-        w.name === widgetName ? { ...w, value: validateWidgetValue(value) } : w
-      )
-      vueNodeData.set(nodeId, {
-        ...currentData,
-        widgets: updatedWidgets
-      })
-      performanceMetrics.callbackUpdateCount++
-    } catch (error) {
-      // Ignore widget update errors to prevent cascade failures
-    }
-  }
-
-  /**
-   * Creates a wrapped callback for a widget that maintains LiteGraph/Vue sync
-   */
-  const createWrappedWidgetCallback = (
-    widget: { value?: unknown; name: string }, // LiteGraph widget with minimal typing
-    originalCallback: ((value: unknown) => void) | undefined,
-    nodeId: string
-  ) => {
-    let updateInProgress = false
-
-    return (value: unknown) => {
-      if (updateInProgress) return
-      updateInProgress = true
-
-      try {
-        // 1. Update the widget value in LiteGraph (critical for LiteGraph state)
-        // Validate that the value is of an acceptable type
-        if (
-          value !== null &&
-          value !== undefined &&
-          typeof value !== 'string' &&
-          typeof value !== 'number' &&
-          typeof value !== 'boolean' &&
-          typeof value !== 'object'
-        ) {
-          console.warn(`Invalid widget value type: ${typeof value}`)
-          updateInProgress = false
-          return
-        }
-
-        // Always update widget.value to ensure sync
-        widget.value = value
-
-        // 2. Call the original callback if it exists
-        if (originalCallback) {
-          originalCallback.call(widget, value)
-        }
-
-        // 3. Update Vue state to maintain synchronization
-        updateVueWidgetState(nodeId, widget.name, value)
-      } finally {
-        updateInProgress = false
-      }
-    }
-  }
-
-  /**
-   * Sets up widget callbacks for a node - now with reduced nesting
-   */
-  const setupNodeWidgetCallbacks = (node: LGraphNode) => {
-    if (!node.widgets) return
-
-    const nodeId = String(node.id)
-
-    node.widgets.forEach((widget) => {
-      const originalCallback = widget.callback
-      widget.callback = createWrappedWidgetCallback(
-        widget,
-        originalCallback,
-        nodeId
-      )
-    })
-  }
-
-  // Uncomment when needed for future features
-  // const getNodeMetadata = (node: LGraphNode): NodeMetadata => {
-  //   let metadata = nodeMetadata.get(node)
-  //   if (!metadata) {
-  //     attachMetadata(node)
-  //     metadata = nodeMetadata.get(node)!
-  //   }
-  //   return metadata
-  // }
-
-  const scheduleUpdate = (
-    nodeId?: string,
-    priority: 'critical' | 'normal' | 'low' = 'normal'
-  ) => {
-    if (nodeId) {
-      const state = nodeState.get(nodeId)
-      if (state) state.dirty = true
-
-      // Priority queuing
-      if (priority === 'critical') {
-        criticalUpdates.add(nodeId)
-        flush() // Immediate flush for critical updates
-        return
-      } else if (priority === 'low') {
-        lowPriorityUpdates.add(nodeId)
-      } else {
-        pendingUpdates.add(nodeId)
-      }
-    }
-
-    if (!updateScheduled) {
-      updateScheduled = true
-
-      // Adaptive batching strategy
-      if (pendingUpdates.size > 10) {
-        // Many updates - batch in nextTick
-        void nextTick(() => flush())
-      } else {
-        // Few updates - small delay for more batching
-        batchTimeoutId = window.setTimeout(() => flush(), 4)
-      }
-    }
-  }
-
-  const flush = () => {
-    const startTime = performance.now()
-
-    if (batchTimeoutId !== null) {
-      clearTimeout(batchTimeoutId)
-      batchTimeoutId = null
-    }
-
-    // Clear all pending updates
-    criticalUpdates.clear()
-    pendingUpdates.clear()
-    lowPriorityUpdates.clear()
-    updateScheduled = false
-
-    // Sync with graph state
-    syncWithGraph()
-
-    const endTime = performance.now()
-    performanceMetrics.updateTime = endTime - startTime
   }
 
   const syncWithGraph = () => {
@@ -431,11 +339,6 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
       if (!currentNodes.has(id)) {
         nodeRefs.delete(id)
         vueNodeData.delete(id)
-        nodeState.delete(id)
-        nodePositions.delete(id)
-        nodeSizes.delete(id)
-        lastNodesSnapshot.delete(id)
-        spatialIndex.remove(id)
       }
     }
 
@@ -446,168 +349,9 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
       // Store non-reactive reference
       nodeRefs.set(id, node)
 
-      // Set up widget callbacks BEFORE extracting data (critical order)
-      setupNodeWidgetCallbacks(node)
-
       // Extract and store safe data for Vue
       vueNodeData.set(id, extractVueNodeData(node))
-
-      if (!nodeState.has(id)) {
-        nodeState.set(id, {
-          visible: true,
-          dirty: false,
-          lastUpdate: performance.now(),
-          culled: false
-        })
-        nodePositions.set(id, { x: node.pos[0], y: node.pos[1] })
-        nodeSizes.set(id, { width: node.size[0], height: node.size[1] })
-        attachMetadata(node)
-
-        // Add to spatial index
-        const bounds: Bounds = {
-          x: node.pos[0],
-          y: node.pos[1],
-          width: node.size[0],
-          height: node.size[1]
-        }
-        spatialIndex.insert(id, bounds, id)
-      }
     })
-
-    // Update performance metrics
-    performanceMetrics.nodeCount = vueNodeData.size
-    performanceMetrics.culledCount = Array.from(nodeState.values()).filter(
-      (s) => s.culled
-    ).length
-  }
-
-  // Most performant: Direct position sync without re-setting entire node
-  // Query visible nodes using QuadTree spatial index
-  const getVisibleNodeIds = (viewportBounds: Bounds): Set<string> => {
-    const startTime = performance.now()
-
-    // Use QuadTree for fast spatial query
-    const results: string[] = spatialIndex.query(viewportBounds)
-    const visibleIds = new Set(results)
-
-    lastSpatialQueryTime = performance.now() - startTime
-    spatialMetrics.queryTime = lastSpatialQueryTime
-
-    return visibleIds
-  }
-
-  /**
-   * Detects position changes for a single node and updates reactive state
-   */
-  const detectPositionChanges = (node: LGraphNode, id: string): boolean => {
-    const currentPos = nodePositions.get(id)
-
-    if (
-      !currentPos ||
-      currentPos.x !== node.pos[0] ||
-      currentPos.y !== node.pos[1]
-    ) {
-      nodePositions.set(id, { x: node.pos[0], y: node.pos[1] })
-
-      // Push position change to layout store
-      // Source is already set to 'canvas' in detectChangesInRAF
-      void moveNode(id, { x: node.pos[0], y: node.pos[1] })
-
-      return true
-    }
-    return false
-  }
-
-  /**
-   * Detects size changes for a single node and updates reactive state
-   */
-  const detectSizeChanges = (node: LGraphNode, id: string): boolean => {
-    const currentSize = nodeSizes.get(id)
-
-    if (
-      !currentSize ||
-      currentSize.width !== node.size[0] ||
-      currentSize.height !== node.size[1]
-    ) {
-      nodeSizes.set(id, { width: node.size[0], height: node.size[1] })
-
-      // Push size change to layout store
-      // Source is already set to 'canvas' in detectChangesInRAF
-      void resizeNode(id, {
-        width: node.size[0],
-        height: node.size[1]
-      })
-
-      return true
-    }
-    return false
-  }
-
-  /**
-   * Updates spatial index for a node if bounds changed
-   */
-  const updateSpatialIndex = (node: LGraphNode, id: string): void => {
-    const bounds: Bounds = {
-      x: node.pos[0],
-      y: node.pos[1],
-      width: node.size[0],
-      height: node.size[1]
-    }
-    spatialIndex.update(id, bounds)
-  }
-
-  /**
-   * Updates performance metrics after change detection
-   */
-  const updatePerformanceMetrics = (
-    startTime: number,
-    positionUpdates: number,
-    sizeUpdates: number
-  ): void => {
-    const endTime = performance.now()
-    performanceMetrics.updateTime = endTime - startTime
-    performanceMetrics.nodeCount = vueNodeData.size
-    performanceMetrics.culledCount = Array.from(nodeState.values()).filter(
-      (state) => state.culled
-    ).length
-    spatialMetrics.nodesInIndex = spatialIndex.size
-
-    if (positionUpdates > 0 || sizeUpdates > 0) {
-      performanceMetrics.rafUpdateCount++
-    }
-  }
-
-  /**
-   * Main RAF change detection function
-   */
-  const detectChangesInRAF = () => {
-    const startTime = performance.now()
-
-    if (!graph?._nodes) return
-
-    let positionUpdates = 0
-    let sizeUpdates = 0
-
-    // Set source for all canvas-driven updates
-    setSource(LayoutSource.Canvas)
-
-    // Process each node for changes
-    for (const node of graph._nodes) {
-      const id = String(node.id)
-
-      const posChanged = detectPositionChanges(node, id)
-      const sizeChanged = detectSizeChanges(node, id)
-
-      if (posChanged) positionUpdates++
-      if (sizeChanged) sizeUpdates++
-
-      // Update spatial index if geometry changed
-      if (posChanged || sizeChanged) {
-        updateSpatialIndex(node, id)
-      }
-    }
-
-    updatePerformanceMetrics(startTime, positionUpdates, sizeUpdates)
   }
 
   /**
@@ -623,37 +367,13 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
     // Store non-reactive reference to original node
     nodeRefs.set(id, node)
 
-    // Set up widget callbacks BEFORE extracting data (critical order)
-    setupNodeWidgetCallbacks(node)
-
     // Extract initial data for Vue (may be incomplete during graph configure)
     vueNodeData.set(id, extractVueNodeData(node))
-
-    // Set up reactive tracking state
-    nodeState.set(id, {
-      visible: true,
-      dirty: false,
-      lastUpdate: performance.now(),
-      culled: false
-    })
 
     const initializeVueNodeLayout = () => {
       // Extract actual positions after configure() has potentially updated them
       const nodePosition = { x: node.pos[0], y: node.pos[1] }
       const nodeSize = { width: node.size[0], height: node.size[1] }
-
-      nodePositions.set(id, nodePosition)
-      nodeSizes.set(id, nodeSize)
-      attachMetadata(node)
-
-      // Add to spatial index for viewport culling with final positions
-      const nodeBounds: Bounds = {
-        x: nodePosition.x,
-        y: nodePosition.y,
-        width: nodeSize.width,
-        height: nodeSize.height
-      }
-      spatialIndex.insert(id, nodeBounds, id)
 
       // Add node to layout store with final positions
       setSource(LayoutSource.Canvas)
@@ -698,9 +418,6 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
   ) => {
     const id = String(node.id)
 
-    // Remove from spatial index
-    spatialIndex.remove(id)
-
     // Remove node from layout store
     setSource(LayoutSource.Canvas)
     void deleteNode(id)
@@ -708,10 +425,6 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
     // Clean up all tracking references
     nodeRefs.delete(id)
     vueNodeData.delete(id)
-    nodeState.delete(id)
-    nodePositions.delete(id)
-    nodeSizes.delete(id)
-    lastNodesSnapshot.delete(id)
 
     // Call original callback if provided
     if (originalCallback) {
@@ -725,7 +438,7 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
   const createCleanupFunction = (
     originalOnNodeAdded: ((node: LGraphNode) => void) | undefined,
     originalOnNodeRemoved: ((node: LGraphNode) => void) | undefined,
-    originalOnTrigger: ((action: string, param: unknown) => void) | undefined
+    originalOnTrigger: ((event: LGraphTriggerEvent) => void) | undefined
   ) => {
     return () => {
       // Restore original callbacks
@@ -733,23 +446,9 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
       graph.onNodeRemoved = originalOnNodeRemoved || undefined
       graph.onTrigger = originalOnTrigger || undefined
 
-      // Clear pending updates
-      if (batchTimeoutId !== null) {
-        clearTimeout(batchTimeoutId)
-        batchTimeoutId = null
-      }
-
       // Clear all state maps
       nodeRefs.clear()
       vueNodeData.clear()
-      nodeState.clear()
-      nodePositions.clear()
-      nodeSizes.clear()
-      lastNodesSnapshot.clear()
-      pendingUpdates.clear()
-      criticalUpdates.clear()
-      lowPriorityUpdates.clear()
-      spatialIndex.clear()
     }
   }
 
@@ -771,29 +470,19 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
       handleNodeRemoved(node, originalOnNodeRemoved)
     }
 
-    // Listen for property change events from instrumented nodes
-    graph.onTrigger = (action: string, param: unknown) => {
-      if (
-        action === 'node:property:changed' &&
-        param &&
-        typeof param === 'object'
-      ) {
-        const event = param as {
-          nodeId: string | number
-          property: string
-          oldValue: unknown
-          newValue: unknown
-        }
-
-        const nodeId = String(event.nodeId)
+    const triggerHandlers: {
+      [K in LGraphTriggerAction]: (event: LGraphTriggerParam<K>) => void
+    } = {
+      'node:property:changed': (propertyEvent) => {
+        const nodeId = String(propertyEvent.nodeId)
         const currentData = vueNodeData.get(nodeId)
 
         if (currentData) {
-          switch (event.property) {
+          switch (propertyEvent.property) {
             case 'title':
               vueNodeData.set(nodeId, {
                 ...currentData,
-                title: String(event.newValue)
+                title: String(propertyEvent.newValue)
               })
               break
             case 'flags.collapsed':
@@ -801,23 +490,82 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
                 ...currentData,
                 flags: {
                   ...currentData.flags,
-                  collapsed: Boolean(event.newValue)
+                  collapsed: Boolean(propertyEvent.newValue)
+                }
+              })
+              break
+            case 'flags.pinned':
+              vueNodeData.set(nodeId, {
+                ...currentData,
+                flags: {
+                  ...currentData.flags,
+                  pinned: Boolean(propertyEvent.newValue)
                 }
               })
               break
             case 'mode':
               vueNodeData.set(nodeId, {
                 ...currentData,
-                mode: typeof event.newValue === 'number' ? event.newValue : 0
+                mode:
+                  typeof propertyEvent.newValue === 'number'
+                    ? propertyEvent.newValue
+                    : 0
+              })
+              break
+            case 'color':
+              vueNodeData.set(nodeId, {
+                ...currentData,
+                color:
+                  typeof propertyEvent.newValue === 'string'
+                    ? propertyEvent.newValue
+                    : undefined
+              })
+              break
+            case 'bgcolor':
+              vueNodeData.set(nodeId, {
+                ...currentData,
+                bgcolor:
+                  typeof propertyEvent.newValue === 'string'
+                    ? propertyEvent.newValue
+                    : undefined
+              })
+              break
+            case 'shape':
+              vueNodeData.set(nodeId, {
+                ...currentData,
+                shape:
+                  typeof propertyEvent.newValue === 'number'
+                    ? propertyEvent.newValue
+                    : undefined
               })
           }
         }
+      },
+      'node:slot-errors:changed': (slotErrorsEvent) => {
+        refreshNodeSlots(String(slotErrorsEvent.nodeId))
+      },
+      'node:slot-links:changed': (slotLinksEvent) => {
+        if (slotLinksEvent.slotType === NodeSlotType.INPUT) {
+          refreshNodeSlots(String(slotLinksEvent.nodeId))
+        }
+      }
+    }
+
+    graph.onTrigger = (event: LGraphTriggerEvent) => {
+      switch (event.type) {
+        case 'node:property:changed':
+          triggerHandlers['node:property:changed'](event)
+          break
+        case 'node:slot-errors:changed':
+          triggerHandlers['node:slot-errors:changed'](event)
+          break
+        case 'node:slot-links:changed':
+          triggerHandlers['node:slot-links:changed'](event)
+          break
       }
 
-      // Call original trigger handler if it exists
-      if (originalOnTrigger) {
-        originalOnTrigger(action, param)
-      }
+      // Chain to original handler
+      originalOnTrigger?.(event)
     }
 
     // Initialize state
@@ -845,18 +593,7 @@ export const useGraphNodeManager = (graph: LGraph): GraphNodeManager => {
 
   return {
     vueNodeData,
-    nodeState,
-    nodePositions,
-    nodeSizes,
     getNode,
-    setupEventListeners,
-    cleanup,
-    scheduleUpdate,
-    forceSync: syncWithGraph,
-    detectChangesInRAF,
-    getVisibleNodeIds,
-    performanceMetrics,
-    spatialMetrics,
-    getSpatialIndexDebugInfo: () => spatialIndex.getDebugInfo()
+    cleanup
   }
 }

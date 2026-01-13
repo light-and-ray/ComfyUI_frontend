@@ -4,9 +4,9 @@
       v-tooltip.top="
         isDisabled ? $t('manager.enablePackToChangeVersion') : null
       "
-      class="inline-flex items-center gap-1 rounded-2xl text-xs py-1"
+      class="inline-flex items-center gap-1 rounded-2xl py-1 text-xs"
       :class="{
-        'bg-gray-100 dark-theme:bg-neutral-700 px-1.5': fill,
+        'bg-dialog-surface px-1.5': fill,
         'cursor-pointer': !isDisabled,
         'cursor-not-allowed opacity-60': isDisabled
       }"
@@ -19,7 +19,7 @@
     >
       <i
         v-if="isUpdateAvailable"
-        class="pi pi-arrow-circle-up text-blue-600 text-xs"
+        class="pi pi-arrow-circle-up text-xs text-blue-600"
       />
       <span>{{ installedVersion }}</span>
       <i v-if="!isDisabled" class="pi pi-chevron-right text-xxs" />
@@ -46,9 +46,9 @@ import Popover from 'primevue/popover'
 import { valid as validSemver } from 'semver'
 import { computed, ref, watch } from 'vue'
 
-import { usePackUpdateStatus } from '@/composables/nodePack/usePackUpdateStatus'
 import type { components } from '@/types/comfyRegistryTypes'
 import PackVersionSelectorPopover from '@/workbench/extensions/manager/components/manager/PackVersionSelectorPopover.vue'
+import { usePackUpdateStatus } from '@/workbench/extensions/manager/composables/nodePack/usePackUpdateStatus'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
 
 const TRUNCATED_HASH_LENGTH = 7
@@ -63,7 +63,7 @@ const {
   fill?: boolean
 }>()
 
-const { isUpdateAvailable } = usePackUpdateStatus(nodePack)
+const { isUpdateAvailable } = usePackUpdateStatus(() => nodePack)
 const popoverRef = ref()
 
 const managerStore = useComfyManagerStore()

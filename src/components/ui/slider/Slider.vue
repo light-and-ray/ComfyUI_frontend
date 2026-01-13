@@ -8,11 +8,13 @@ import {
   SliderTrack,
   useForwardPropsEmits
 } from 'reka-ui'
-import { type HTMLAttributes, ref } from 'vue'
+import { ref } from 'vue'
+import type { HTMLAttributes } from 'vue'
 
 import { cn } from '@/utils/tailwindUtil'
 
 const props = defineProps<
+  // eslint-disable-next-line vue/no-unused-properties
   SliderRootProps & { class?: HTMLAttributes['class'] }
 >()
 
@@ -58,7 +60,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     >
       <SliderRange
         data-slot="slider-range"
-        class="bg-node-component-surface-highlight absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+        class="absolute bg-node-component-surface-highlight data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
       />
     </SliderTrack>
 

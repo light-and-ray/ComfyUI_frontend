@@ -17,7 +17,8 @@
 <script setup lang="ts" generic="T">
 import { useElementSize, useScroll, whenever } from '@vueuse/core'
 import { clamp, debounce } from 'es-toolkit/compat'
-import { type CSSProperties, computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import type { CSSProperties } from 'vue'
 
 type GridState = {
   start: number
@@ -116,16 +117,7 @@ onBeforeUnmount(() => {
 .scroll-container {
   height: 100%;
   overflow-y: auto;
-
-  /* Firefox */
-  scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    width: 1px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background-color: transparent;
-  }
+  scrollbar-width: thin;
+  scrollbar-color: var(--dialog-surface) transparent;
 }
 </style>

@@ -6,28 +6,23 @@
  * rendering data that can be consumed by the PathRenderer.
  * Maintains backward compatibility with existing litegraph integration.
  */
-import type { LGraph } from '@/lib/litegraph/src/LGraph'
 import type { LLink } from '@/lib/litegraph/src/LLink'
 import type { Reroute } from '@/lib/litegraph/src/Reroute'
-import type {
-  CanvasColour,
-  ReadOnlyPoint
-} from '@/lib/litegraph/src/interfaces'
+import type { CanvasColour, Point } from '@/lib/litegraph/src/interfaces'
 import { LiteGraph } from '@/lib/litegraph/src/litegraph'
 import {
   LinkDirection,
   LinkMarkerShape,
   LinkRenderType
 } from '@/lib/litegraph/src/types/globalEnums'
-import { getSlotPosition } from '@/renderer/core/canvas/litegraph/slotCalculations'
-import {
-  type ArrowShape,
-  CanvasPathRenderer,
-  type Direction,
-  type LinkRenderData,
-  type RenderContext as PathRenderContext,
-  type Point,
-  type RenderMode
+import { CanvasPathRenderer } from '@/renderer/core/canvas/pathRenderer'
+import type {
+  ArrowShape,
+  Direction,
+  LinkRenderData,
+  RenderContext as PathRenderContext,
+  Point as PointObj,
+  RenderMode
 } from '@/renderer/core/canvas/pathRenderer'
 import { layoutStore } from '@/renderer/core/layout/store/layoutStore'
 import type { Bounds } from '@/renderer/core/layout/types'
@@ -54,142 +49,10 @@ export interface LinkRenderContext {
   disabledPattern?: CanvasPattern | null
 }
 
-interface LinkRenderOptions {
-  color?: CanvasColour
-  flow?: boolean
-  skipBorder?: boolean
-  disabled?: boolean
-}
-
 export class LitegraphLinkAdapter {
-  private graph: LGraph
-  private pathRenderer: CanvasPathRenderer
-  public enableLayoutStoreWrites = true
+  private readonly pathRenderer = new CanvasPathRenderer()
 
-  constructor(graph: LGraph) {
-    this.graph = graph
-    this.pathRenderer = new CanvasPathRenderer()
-  }
-
-  /**
-   * Render a single link with all necessary data properly fetched
-   * Populates link.path for hit detection
-   */
-  renderLink(
-    ctx: CanvasRenderingContext2D,
-    link: LLink,
-    context: LinkRenderContext,
-    options: LinkRenderOptions = {}
-  ): void {
-    // Get nodes from graph
-    const sourceNode = this.graph.getNodeById(link.origin_id)
-    const targetNode = this.graph.getNodeById(link.target_id)
-
-    if (!sourceNode || !targetNode) {
-      console.warn(`Cannot render link ${link.id}: missing nodes`)
-      return
-    }
-
-    // Get slots from nodes
-    const sourceSlot = sourceNode.outputs?.[link.origin_slot]
-    const targetSlot = targetNode.inputs?.[link.target_slot]
-
-    if (!sourceSlot || !targetSlot) {
-      console.warn(`Cannot render link ${link.id}: missing slots`)
-      return
-    }
-
-    // Get positions using layout tree data if available
-    const startPos = getSlotPosition(
-      sourceNode,
-      link.origin_slot,
-      false // output
-    )
-    const endPos = getSlotPosition(
-      targetNode,
-      link.target_slot,
-      true // input
-    )
-
-    // Get directions from slots
-    const startDir = sourceSlot.dir || LinkDirection.RIGHT
-    const endDir = targetSlot.dir || LinkDirection.LEFT
-
-    // Convert to pure render data
-    const linkData = this.convertToLinkRenderData(
-      link,
-      { x: startPos[0], y: startPos[1] },
-      { x: endPos[0], y: endPos[1] },
-      startDir,
-      endDir,
-      options
-    )
-
-    // Convert context
-    const pathContext = this.convertToPathRenderContext(context)
-
-    // Render using pure renderer
-    const path = this.pathRenderer.drawLink(ctx, linkData, pathContext)
-
-    // Store path for hit detection
-    link.path = path
-
-    // Update layout store when writes are enabled (event-driven path)
-    if (this.enableLayoutStoreWrites && link.id !== -1) {
-      // Calculate bounds and center only when writing
-      const bounds = this.calculateLinkBounds(startPos, endPos, linkData)
-      const centerPos = linkData.centerPos || {
-        x: (startPos[0] + endPos[0]) / 2,
-        y: (startPos[1] + endPos[1]) / 2
-      }
-
-      layoutStore.updateLinkLayout(link.id, {
-        id: link.id,
-        path: path,
-        bounds: bounds,
-        centerPos: centerPos,
-        sourceNodeId: String(link.origin_id),
-        targetNodeId: String(link.target_id),
-        sourceSlot: link.origin_slot,
-        targetSlot: link.target_slot
-      })
-
-      // Also update segment layout for the whole link (null rerouteId means final segment)
-      layoutStore.updateLinkSegmentLayout(link.id, null, {
-        path: path,
-        bounds: bounds,
-        centerPos: centerPos
-      })
-    }
-  }
-
-  /**
-   * Convert litegraph link data to pure render format
-   */
-  private convertToLinkRenderData(
-    link: LLink,
-    startPoint: Point,
-    endPoint: Point,
-    startDir: LinkDirection,
-    endDir: LinkDirection,
-    options: LinkRenderOptions
-  ): LinkRenderData {
-    return {
-      id: String(link.id),
-      startPoint,
-      endPoint,
-      startDirection: this.convertDirection(startDir),
-      endDirection: this.convertDirection(endDir),
-      color: options.color
-        ? String(options.color)
-        : link.color
-          ? String(link.color)
-          : undefined,
-      type: link.type !== undefined ? String(link.type) : undefined,
-      flow: options.flow || false,
-      disabled: options.disabled || false
-    }
-  }
+  constructor(public readonly enableLayoutStoreWrites = true) {}
 
   /**
    * Convert LinkDirection enum to Direction string
@@ -306,7 +169,7 @@ export class LitegraphLinkAdapter {
    * Critically: does nothing for CENTER/NONE directions (no case for them)
    */
   private applySplineOffset(
-    point: Point,
+    point: PointObj,
     direction: LinkDirection,
     distance: number
   ): void {
@@ -333,8 +196,8 @@ export class LitegraphLinkAdapter {
    */
   renderLinkDirect(
     ctx: CanvasRenderingContext2D,
-    a: ReadOnlyPoint,
-    b: ReadOnlyPoint,
+    a: Readonly<Point>,
+    b: Readonly<Point>,
     link: LLink | null,
     skip_border: boolean,
     flow: number | boolean | null,
@@ -344,8 +207,8 @@ export class LitegraphLinkAdapter {
     context: LinkRenderContext,
     extras: {
       reroute?: Reroute
-      startControl?: ReadOnlyPoint
-      endControl?: ReadOnlyPoint
+      startControl?: Readonly<Point>
+      endControl?: Readonly<Point>
       num_sublines?: number
       disabled?: boolean
     } = {}
@@ -384,7 +247,7 @@ export class LitegraphLinkAdapter {
       )
       const factor = 0.25
 
-      const cps: Point[] = []
+      const cps: PointObj[] = []
 
       if (hasStartCtrl && hasEndCtrl) {
         // Both provided explicitly
@@ -449,7 +312,7 @@ export class LitegraphLinkAdapter {
       // Copy calculated center position back to litegraph object
       // This is needed for hit detection and menu interaction
       if (linkData.centerPos) {
-        linkSegment._pos = linkSegment._pos || new Float32Array(2)
+        linkSegment._pos = linkSegment._pos || [0, 0]
         linkSegment._pos[0] = linkData.centerPos.x
         linkSegment._pos[1] = linkData.centerPos.y
 
@@ -463,8 +326,8 @@ export class LitegraphLinkAdapter {
       if (this.enableLayoutStoreWrites && link && link.id !== -1) {
         // Calculate bounds and center only when writing
         const bounds = this.calculateLinkBounds(
-          [linkData.startPoint.x, linkData.startPoint.y] as ReadOnlyPoint,
-          [linkData.endPoint.x, linkData.endPoint.y] as ReadOnlyPoint,
+          [linkData.startPoint.x, linkData.startPoint.y] as Readonly<Point>,
+          [linkData.endPoint.x, linkData.endPoint.y] as Readonly<Point>,
           linkData
         )
         const centerPos = linkData.centerPos || {
@@ -499,8 +362,8 @@ export class LitegraphLinkAdapter {
 
   renderDraggingLink(
     ctx: CanvasRenderingContext2D,
-    from: ReadOnlyPoint,
-    to: ReadOnlyPoint,
+    from: Readonly<Point>,
+    to: Readonly<Point>,
     colour: CanvasColour,
     startDir: LinkDirection,
     endDir: LinkDirection,
@@ -531,8 +394,8 @@ export class LitegraphLinkAdapter {
    * Includes padding for line width and control points
    */
   private calculateLinkBounds(
-    startPos: ReadOnlyPoint,
-    endPos: ReadOnlyPoint,
+    startPos: Readonly<Point>,
+    endPos: Readonly<Point>,
     linkData: LinkRenderData
   ): Bounds {
     let minX = Math.min(startPos[0], endPos[0])

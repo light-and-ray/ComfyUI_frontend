@@ -16,8 +16,8 @@ import type {
   Size
 } from '../interfaces'
 import type { LiteGraph } from '../litegraph'
-import type { TWidgetValue } from '../types/widgets'
 import type { RenderShape } from './globalEnums'
+import type { TWidgetValue } from './widgets'
 
 /**
  * An object that implements custom pre-serialization logic via {@link Serialisable.asSerialisable}.
@@ -111,6 +111,8 @@ export interface ExportedSubgraphInstance extends NodeSubgraphSharedProps {
    * @see {@link ExportedSubgraph.subgraphs}
    */
   type: UUID
+  /** Custom properties for this subgraph instance */
+  properties?: Dictionary<NodeProperty | undefined>
 }
 
 /**
@@ -157,7 +159,7 @@ export interface SubgraphIO extends SubgraphIOShared {
   id: UUID
   /** The data type this slot uses. Unlike nodes, this does not support legacy numeric types. */
   type: string
-  /** Links connected to this slot, or `undefined` if not connected. An ouptut slot should only ever have one link. */
+  /** Links connected to this slot, or `undefined` if not connected. An output slot should only ever have one link. */
   linkIds?: LinkId[]
 }
 

@@ -1,13 +1,31 @@
 <template>
-  <div
-    class="inline-flex justify-center items-center gap-1 shrink-0 py-1 px-2 text-xs bg-[#D9D9D966]/40 rounded font-bold text-white/90"
-  >
-    <slot name="icon" class="text-xs text-white/90"></slot>
+  <div :class="chipClasses">
+    <slot name="icon"></slot>
     <span>{{ label }}</span>
   </div>
 </template>
 <script setup lang="ts">
-const { label } = defineProps<{
+import { computed } from 'vue'
+
+import { cn } from '@/utils/tailwindUtil'
+
+const { label, variant = 'dark' } = defineProps<{
   label: string
+  variant?: 'dark' | 'light' | 'gray'
 }>()
+
+const baseClasses =
+  'inline-flex shrink-0 items-center justify-center gap-1 rounded px-2 py-1 text-xs font-bold'
+
+const variantStyles = {
+  dark: 'bg-zinc-500/40 text-white/90',
+  light: cn('backdrop-blur-[2px] bg-base-background/50 text-base-foreground'),
+  gray: cn(
+    'backdrop-blur-[2px] bg-modal-card-tag-background text-base-foreground'
+  )
+}
+
+const chipClasses = computed(() => {
+  return cn(baseClasses, variantStyles[variant])
+})
 </script>

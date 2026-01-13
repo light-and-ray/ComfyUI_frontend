@@ -1,21 +1,25 @@
 <template>
   <div class="overflow-hidden">
     <Tabs :value="activeTab">
-      <TabList class="overflow-x-auto scrollbar-hide">
-        <Tab v-if="hasCompatibilityIssues" value="warning" class="p-2 mr-6">
+      <TabList class="scrollbar-hide overflow-x-auto">
+        <Tab
+          v-if="hasCompatibilityIssues"
+          value="warning"
+          class="mr-6 p-2 font-inter"
+        >
           <div class="flex items-center gap-1">
             <span>⚠️</span>
             {{ importFailed ? $t('g.error') : $t('g.warning') }}
           </div>
         </Tab>
-        <Tab value="description" class="p-2 mr-6">
+        <Tab value="description" class="mr-6 p-2 font-inter">
           {{ $t('g.description') }}
         </Tab>
-        <Tab value="nodes" class="p-2">
+        <Tab value="nodes" class="p-2 font-inter">
           {{ $t('g.nodes') }}
         </Tab>
       </TabList>
-      <TabPanels class="overflow-auto py-4 px-2">
+      <TabPanels class="overflow-auto px-2 py-4">
         <TabPanel
           v-if="hasCompatibilityIssues"
           value="warning"
@@ -46,11 +50,11 @@ import Tabs from 'primevue/tabs'
 import { computed, inject, ref, watchEffect } from 'vue'
 
 import type { components } from '@/types/comfyRegistryTypes'
-import type { ConflictDetectionResult } from '@/types/conflictDetectionTypes'
-import { ImportFailedKey } from '@/types/importFailedTypes'
 import DescriptionTabPanel from '@/workbench/extensions/manager/components/manager/infoPanel/tabs/DescriptionTabPanel.vue'
 import NodesTabPanel from '@/workbench/extensions/manager/components/manager/infoPanel/tabs/NodesTabPanel.vue'
 import WarningTabPanel from '@/workbench/extensions/manager/components/manager/infoPanel/tabs/WarningTabPanel.vue'
+import type { ConflictDetectionResult } from '@/workbench/extensions/manager/types/conflictDetectionTypes'
+import { ImportFailedKey } from '@/workbench/extensions/manager/types/importFailedTypes'
 
 const { nodePack, hasCompatibilityIssues, conflictResult } = defineProps<{
   nodePack: components['schemas']['Node']

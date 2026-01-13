@@ -15,13 +15,17 @@ yarn.lock
 # Cache files
 .eslintcache
 .prettiercache
+.stylelintcache
 
 node_modules
+.pnpm-store
 dist
 dist-ssr
 *.local
 # Claude configuration
 .claude/*.local.json
+.claude/*.local.md
+.claude/*.local.txt
 CLAUDE.local.md
 
 # Editor directories and files
@@ -29,6 +33,7 @@ CLAUDE.local.md
 *.code-workspace
 !.vscode/extensions.json
 !.vscode/tailwind.json
+!.vscode/custom-css.json
 !.vscode/settings.json.default
 !.vscode/launch.json.default
 .idea
@@ -44,6 +49,7 @@ components.d.ts
 tests-ui/data/*
 tests-ui/ComfyUI_examples
 tests-ui/workflows/examples
+coverage/
 
 # Browser tests
 /test-results/
@@ -73,7 +79,7 @@ templates_repo/
 vite.config.mts.timestamp-*.mjs
 
 # Linux core dumps
-./core
+/core
 
 *storybook.log
 storybook-static
@@ -87,3 +93,6 @@ storybook-static
 .github/instructions/nx.instructions.md
 vite.config.*.timestamp*
 vitest.config.*.timestamp*
+
+# Weekly docs check output
+/output.txt

@@ -1,21 +1,37 @@
 <template>
-  <Textarea
-    v-model="localValue"
-    v-bind="filteredProps"
-    :disabled="readonly"
-    :class="cn(WidgetInputBaseClass, 'w-full text-xs')"
-    :placeholder="placeholder || widget.name || ''"
-    size="small"
-    rows="3"
-    @update:model-value="onChange"
-  />
+  <FloatLabel
+    variant="in"
+    :class="
+      cn(
+        'rounded-lg space-y-1 focus-within:ring focus-within:ring-component-node-widget-background-highlighted transition-all',
+        widget.borderStyle
+      )
+    "
+  >
+    <Textarea
+      v-bind="filteredProps"
+      :id
+      v-model="modelValue"
+      :class="cn(WidgetInputBaseClass, 'size-full text-xs resize-none')"
+      :placeholder
+      :readonly="widget.options?.read_only"
+      :disabled="widget.options?.read_only"
+      fluid
+      data-capture-wheel="true"
+      @pointerdown.capture.stop
+      @pointermove.capture.stop
+      @pointerup.capture.stop
+      @contextmenu.capture.stop
+    />
+    <label :for="id">{{ displayName }}</label>
+  </FloatLabel>
 </template>
 
 <script setup lang="ts">
+import FloatLabel from 'primevue/floatlabel'
 import Textarea from 'primevue/textarea'
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 
-import { useStringWidgetValue } from '@/composables/graph/useWidgetValue'
 import type { SimplifiedWidget } from '@/types/simplifiedWidget'
 import { cn } from '@/utils/tailwindUtil'
 import {
@@ -25,25 +41,17 @@ import {
 
 import { WidgetInputBaseClass } from './layout'
 
-const props = defineProps<{
+const { widget, placeholder = '' } = defineProps<{
   widget: SimplifiedWidget<string>
-  modelValue: string
-  readonly?: boolean
   placeholder?: string
 }>()
 
-const emit = defineEmits<{
-  'update:modelValue': [value: string]
-}>()
-
-// Use the composable for consistent widget value handling
-const { localValue, onChange } = useStringWidgetValue(
-  props.widget,
-  props.modelValue,
-  emit
-)
+const modelValue = defineModel<string>({ default: '' })
 
 const filteredProps = computed(() =>
-  filterWidgetProps(props.widget.options, INPUT_EXCLUDED_PROPS)
+  filterWidgetProps(widget.options, INPUT_EXCLUDED_PROPS)
 )
+
+const displayName = computed(() => widget.label || widget.name)
+const id = useId()
 </script>

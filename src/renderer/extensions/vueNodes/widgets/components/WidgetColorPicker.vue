@@ -9,16 +9,18 @@
       <ColorPicker
         v-model="localValue"
         v-bind="filteredProps"
-        :disabled="readonly"
-        class="w-8 h-4 !rounded-full overflow-hidden border-none"
+        class="h-4 w-8 overflow-hidden !rounded-full border-none"
+        :aria-label="widget.name"
         :pt="{
           preview: '!w-full !h-full !border-none'
         }"
         @update:model-value="onPickerUpdate"
       />
-      <span class="text-xs" data-testid="widget-color-text">{{
-        toHexFromFormat(localValue, format)
-      }}</span>
+      <span
+        class="text-xs truncate min-w-[4ch]"
+        data-testid="widget-color-text"
+        >{{ toHexFromFormat(localValue, format) }}</span
+      >
     </label>
   </WidgetLayoutField>
 </template>
@@ -28,12 +30,8 @@ import ColorPicker from 'primevue/colorpicker'
 import { computed, ref, watch } from 'vue'
 
 import type { SimplifiedWidget } from '@/types/simplifiedWidget'
-import {
-  type ColorFormat,
-  type HSB,
-  isColorFormat,
-  toHexFromFormat
-} from '@/utils/colorUtil'
+import { isColorFormat, toHexFromFormat } from '@/utils/colorUtil'
+import type { ColorFormat, HSB } from '@/utils/colorUtil'
 import { cn } from '@/utils/tailwindUtil'
 import {
   PANEL_EXCLUDED_PROPS,
@@ -48,7 +46,6 @@ type WidgetOptions = { format?: ColorFormat } & Record<string, unknown>
 const props = defineProps<{
   widget: SimplifiedWidget<string, WidgetOptions>
   modelValue: string
-  readonly?: boolean
 }>()
 
 const emit = defineEmits<{

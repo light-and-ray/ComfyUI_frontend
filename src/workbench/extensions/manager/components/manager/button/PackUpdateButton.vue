@@ -1,27 +1,24 @@
 <template>
-  <IconTextButton
+  <Button
     v-tooltip.top="
       hasDisabledUpdatePacks ? $t('manager.disabledNodesWontUpdate') : null
     "
-    v-bind="$attrs"
-    type="transparent"
-    :label="$t('manager.updateAll')"
-    :border="true"
+    variant="textonly"
+    class="border"
     size="sm"
     :disabled="isUpdating"
     @click="updateAllPacks"
   >
-    <template v-if="isUpdating" #icon>
-      <DotSpinner duration="1s" :size="12" />
-    </template>
-  </IconTextButton>
+    <DotSpinner v-if="isUpdating" duration="1s" :size="12" />
+    <span>{{ $t('manager.updateAll') }}</span>
+  </Button>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 
-import IconTextButton from '@/components/button/IconTextButton.vue'
 import DotSpinner from '@/components/common/DotSpinner.vue'
+import Button from '@/components/ui/button/Button.vue'
 import type { components } from '@/types/comfyRegistryTypes'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
 
@@ -61,15 +58,12 @@ const updateAllPacks = async () => {
     managerStore.isPackInstalled(pack.id)
   )
   if (!updatablePacks.length) {
-    console.info('No installed packs available for update')
     isUpdating.value = false
     return
   }
-  console.info(`Starting update of ${updatablePacks.length} packs`)
   try {
     await Promise.all(updatablePacks.map(updatePack))
     managerStore.updatePack.clear()
-    console.info('All packs updated successfully')
   } catch (error) {
     console.error('Pack update failed:', error)
     console.error(

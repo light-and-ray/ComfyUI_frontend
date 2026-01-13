@@ -1,25 +1,39 @@
 <template>
   <div
     ref="workflowTabRef"
-    class="flex p-2 gap-2 workflow-tab"
+    class="workflow-tab group flex gap-2 p-2"
     v-bind="$attrs"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
     @click="handleClick"
   >
-    <span class="workflow-label text-sm max-w-[150px] truncate inline-block">
+    <Button
+      v-if="isActiveTab"
+      class="context-menu-button -mx-1 w-auto px-1 py-0"
+      variant="muted-textonly"
+      size="icon-sm"
+      @click.stop="handleMenuClick"
+    >
+      <i class="pi pi-bars" />
+    </Button>
+    <span class="workflow-label inline-block max-w-[150px] truncate text-sm">
       {{ workflowOption.workflow.filename }}
     </span>
     <div class="relative">
-      <span v-if="shouldShowStatusIndicator" class="status-indicator">•</span>
+      <span
+        v-if="shouldShowStatusIndicator"
+        class="absolute top-1/2 left-1/2 z-10 w-4 -translate-1/2 bg-(--comfy-menu-bg) text-2xl font-bold group-hover:hidden"
+        >•</span
+      >
       <Button
-        class="close-button p-0 w-auto"
-        icon="pi pi-times"
-        text
-        severity="secondary"
-        size="small"
+        class="close-button invisible w-auto p-0"
+        variant="muted-textonly"
+        size="icon-sm"
+        :aria-label="t('g.close')"
         @click.stop="onCloseWorkflow(workflowOption)"
-      />
+      >
+        <i class="pi pi-times" />
+      </Button>
     </div>
   </div>
 
@@ -29,22 +43,42 @@
     :thumbnail-url="thumbnailUrl"
     :is-active-tab="isActiveTab"
   />
+
+  <Menu
+    v-if="isActiveTab"
+    ref="menu"
+    :model="menuItems"
+    :popup="true"
+    :pt="{
+      root: {
+        style: 'background-color: var(--comfy-menu-bg)'
+      },
+      itemLink: {
+        class: 'py-2'
+      }
+    }"
+  />
 </template>
 
 <script setup lang="ts">
-import Button from 'primevue/button'
+import type { MenuState } from 'primevue/menu'
+import Menu from 'primevue/menu'
 import { computed, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Button from '@/components/ui/button/Button.vue'
 import {
   usePragmaticDraggable,
   usePragmaticDroppable
 } from '@/composables/usePragmaticDragAndDrop'
+import { useWorkflowActionsMenu } from '@/composables/useWorkflowActionsMenu'
 import { useSettingStore } from '@/platform/settings/settingStore'
+import { useTelemetry } from '@/platform/telemetry'
 import { useWorkflowService } from '@/platform/workflow/core/services/workflowService'
 import type { ComfyWorkflow } from '@/platform/workflow/management/stores/workflowStore'
 import { useWorkflowStore } from '@/platform/workflow/management/stores/workflowStore'
 import { useWorkflowThumbnail } from '@/renderer/core/thumbnail/useWorkflowThumbnail'
+import { useCommandStore } from '@/stores/commandStore'
 import { useWorkspaceStore } from '@/stores/workspaceStore'
 
 import WorkflowTabPopover from './WorkflowTabPopover.vue'
@@ -55,7 +89,6 @@ interface WorkflowOption {
 }
 
 const props = defineProps<{
-  class?: string
   workflowOption: WorkflowOption
 }>()
 
@@ -110,6 +143,12 @@ const thumbnailUrl = computed(() => {
   return workflowThumbnail.getThumbnail(props.workflowOption.workflow.key)
 })
 
+const menu = ref<InstanceType<typeof Menu> & MenuState>()
+
+const { menuItems } = useWorkflowActionsMenu(() =>
+  useCommandStore().execute('Comfy.RenameWorkflow')
+)
+
 // Event handlers that delegate to the popover component
 const handleMouseEnter = (event: Event) => {
   popoverRef.value?.showPopover(event)
@@ -121,6 +160,14 @@ const handleMouseLeave = () => {
 
 const handleClick = (event: Event) => {
   popoverRef.value?.togglePopover(event)
+}
+
+const handleMenuClick = (event: MouseEvent) => {
+  useTelemetry()?.trackUiButtonClicked({
+    button_id: 'workflow_tab_menu_selected'
+  })
+  // Show breadcrumb menu instead of emitting context click
+  menu.value?.toggle(event)
 }
 
 const closeWorkflows = async (options: WorkflowOption[]) => {
@@ -173,18 +220,6 @@ onUnmounted(() => {
   popoverRef.value?.hidePopover()
 })
 </script>
-
-<style scoped>
-@reference '../../assets/css/style.css';
-
-.status-indicator {
-  @apply absolute font-bold;
-  font-size: 1.5rem;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-</style>
 
 <style>
 .p-tooltip.workflow-tab-tooltip {

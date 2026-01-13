@@ -33,9 +33,9 @@ export interface WidgetEventOptions {
   canvas: LGraphCanvas
 }
 
-export abstract class BaseWidget<TWidget extends IBaseWidget = IBaseWidget>
-  implements IBaseWidget
-{
+export abstract class BaseWidget<
+  TWidget extends IBaseWidget = IBaseWidget
+> implements IBaseWidget {
   /** From node edge to widget edge */
   static margin = 15
   /** From widget edge to tip of arrow button */
@@ -74,10 +74,11 @@ export abstract class BaseWidget<TWidget extends IBaseWidget = IBaseWidget>
   computedDisabled?: boolean
   hidden?: boolean
   advanced?: boolean
+  promoted?: boolean
   tooltip?: string
   element?: HTMLElement
   callback?(
-    value: any,
+    value: TWidget['value'],
     canvas?: LGraphCanvas,
     node?: LGraphNode,
     pos?: Point,
@@ -139,6 +140,7 @@ export abstract class BaseWidget<TWidget extends IBaseWidget = IBaseWidget>
       displayValue,
       // @ts-expect-error Prevent naming conflicts with custom nodes.
       labelBaseline,
+      promoted,
       ...safeValues
     } = widget
 
@@ -146,6 +148,7 @@ export abstract class BaseWidget<TWidget extends IBaseWidget = IBaseWidget>
   }
 
   get outline_color() {
+    if (this.promoted) return LiteGraph.WIDGET_PROMOTED_OUTLINE_COLOR
     return this.advanced
       ? LiteGraph.WIDGET_ADVANCED_OUTLINE_COLOR
       : LiteGraph.WIDGET_OUTLINE_COLOR

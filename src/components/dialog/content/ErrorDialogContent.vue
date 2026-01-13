@@ -5,7 +5,7 @@
       icon="pi pi-exclamation-circle"
       :title="title"
       :message="error.exceptionMessage"
-      :text-class="'break-words max-w-[60vw]'"
+      text-class="break-words max-w-[60vw]"
     />
     <template v-if="error.extensionFile">
       <span>{{ t('errorDialog.extensionFileHint') }}:</span>
@@ -13,45 +13,40 @@
       <span class="font-bold">{{ error.extensionFile }}</span>
     </template>
 
-    <div class="flex gap-2 justify-center">
+    <div class="flex justify-center gap-2">
+      <Button v-show="!reportOpen" variant="textonly" @click="showReport">
+        {{ $t('g.showReport') }}
+      </Button>
       <Button
         v-show="!reportOpen"
-        text
-        :label="$t('g.showReport')"
-        @click="showReport"
-      />
-      <Button
-        v-show="!reportOpen"
-        text
-        :label="$t('issueReport.helpFix')"
+        variant="textonly"
         @click="showContactSupport"
-      />
+      >
+        {{ $t('issueReport.helpFix') }}
+      </Button>
     </div>
     <template v-if="reportOpen">
       <Divider />
-      <ScrollPanel class="w-full h-[400px] max-w-[80vw]">
-        <pre class="whitespace-pre-wrap break-words">{{ reportContent }}</pre>
+      <ScrollPanel class="h-[400px] w-full max-w-[80vw]">
+        <pre class="break-words whitespace-pre-wrap">{{ reportContent }}</pre>
       </ScrollPanel>
       <Divider />
     </template>
-    <div class="flex gap-4 justify-end">
+    <div class="flex justify-end gap-4">
       <FindIssueButton
         :error-message="error.exceptionMessage"
         :repo-owner="repoOwner"
         :repo-name="repoName"
       />
-      <Button
-        v-if="reportOpen"
-        :label="$t('g.copyToClipboard')"
-        icon="pi pi-copy"
-        @click="copyReportToClipboard"
-      />
+      <Button v-if="reportOpen" @click="copyReportToClipboard">
+        <i class="pi pi-copy" />
+        {{ $t('g.copyToClipboard') }}
+      </Button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import Button from 'primevue/button'
 import Divider from 'primevue/divider'
 import ScrollPanel from 'primevue/scrollpanel'
 import { useToast } from 'primevue/usetoast'
@@ -60,15 +55,15 @@ import { useI18n } from 'vue-i18n'
 
 import NoResultsPlaceholder from '@/components/common/NoResultsPlaceholder.vue'
 import FindIssueButton from '@/components/dialog/content/error/FindIssueButton.vue'
+import Button from '@/components/ui/button/Button.vue'
 import { useCopyToClipboard } from '@/composables/useCopyToClipboard'
+import { useTelemetry } from '@/platform/telemetry'
 import { api } from '@/scripts/api'
 import { app } from '@/scripts/app'
 import { useCommandStore } from '@/stores/commandStore'
 import { useSystemStatsStore } from '@/stores/systemStatsStore'
-import {
-  type ErrorReportData,
-  generateErrorReport
-} from '@/utils/errorReportUtil'
+import { generateErrorReport } from '@/utils/errorReportUtil'
+import type { ErrorReportData } from '@/utils/errorReportUtil'
 
 const { error } = defineProps<{
   error: Omit<ErrorReportData, 'workflow' | 'systemStats' | 'serverLogs'> & {
@@ -88,18 +83,33 @@ const repoOwner = 'comfyanonymous'
 const repoName = 'ComfyUI'
 const reportContent = ref('')
 const reportOpen = ref(false)
+/**
+ * Open the error report content and track telemetry.
+ */
 const showReport = () => {
+  useTelemetry()?.trackUiButtonClicked({
+    button_id: 'error_dialog_show_report_clicked'
+  })
   reportOpen.value = true
 }
 const toast = useToast()
 const { t } = useI18n()
 const systemStatsStore = useSystemStatsStore()
+const telemetry = useTelemetry()
 
 const title = computed<string>(
   () => error.nodeType ?? error.exceptionType ?? t('errorDialog.defaultTitle')
 )
 
+/**
+ * Open contact support flow from error dialog and track telemetry.
+ */
 const showContactSupport = async () => {
+  telemetry?.trackHelpResourceClicked({
+    resource_type: 'help_feedback',
+    is_external: true,
+    source: 'error_dialog'
+  })
   await useCommandStore().execute('Comfy.ContactSupport')
 }
 
@@ -114,7 +124,7 @@ onMounted(async () => {
     reportContent.value = generateErrorReport({
       systemStats: systemStatsStore.systemStats!,
       serverLogs: logs,
-      workflow: app.graph.serialize(),
+      workflow: app.rootGraph.serialize(),
       exceptionType: error.exceptionType,
       exceptionMessage: error.exceptionMessage,
       traceback: error.traceback,

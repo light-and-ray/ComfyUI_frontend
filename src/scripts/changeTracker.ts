@@ -10,6 +10,7 @@ import {
 import type { ComfyWorkflowJSON } from '@/platform/workflow/validation/schemas/workflowSchema'
 import type { ExecutedWsMessage } from '@/schemas/apiSchema'
 import { useExecutionStore } from '@/stores/executionStore'
+import { useNodeOutputStore } from '@/stores/imagePreviewStore'
 import { useSubgraphNavigationStore } from '@/stores/subgraphNavigationStore'
 
 import { api } from './api'
@@ -86,7 +87,7 @@ export class ChangeTracker {
       app.canvas.ds.offset = this.ds.offset
     }
     if (this.nodeOutputs) {
-      app.nodeOutputs = this.nodeOutputs
+      useNodeOutputStore().restoreOutputs(this.nodeOutputs)
     }
     if (this.subgraphState) {
       const { navigation } = this.subgraphState
@@ -95,13 +96,13 @@ export class ChangeTracker {
       const activeId = navigation.at(-1)
       if (activeId) {
         // Navigate to the saved subgraph
-        const subgraph = app.graph.subgraphs.get(activeId)
+        const subgraph = app.rootGraph.subgraphs.get(activeId)
         if (subgraph) {
           app.canvas.setGraph(subgraph)
         }
       } else {
         // Empty navigation array means root level
-        app.canvas.setGraph(app.graph)
+        app.canvas.setGraph(app.rootGraph)
       }
     }
   }
@@ -129,7 +130,7 @@ export class ChangeTracker {
 
   checkState() {
     if (!app.graph || this.changeCount) return
-    const currentState = clone(app.graph.serialize()) as ComfyWorkflowJSON
+    const currentState = clone(app.rootGraph.serialize()) as ComfyWorkflowJSON
     if (!this.activeState) {
       this.activeState = currentState
       return

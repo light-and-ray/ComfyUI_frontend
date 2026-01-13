@@ -9,13 +9,11 @@ import { CustomEventTarget } from '@/lib/litegraph/src/infrastructure/CustomEven
 import type { LinkConnectorEventMap } from '@/lib/litegraph/src/infrastructure/LinkConnectorEventMap'
 import type {
   ConnectingLink,
+  INodeInputSlot,
+  INodeOutputSlot,
   ItemLocator,
   LinkNetwork,
   LinkSegment
-} from '@/lib/litegraph/src/interfaces'
-import type {
-  INodeInputSlot,
-  INodeOutputSlot
 } from '@/lib/litegraph/src/interfaces'
 import { EmptySubgraphInput } from '@/lib/litegraph/src/subgraph/EmptySubgraphInput'
 import { EmptySubgraphOutput } from '@/lib/litegraph/src/subgraph/EmptySubgraphOutput'
@@ -906,7 +904,6 @@ export class LinkConnector {
     if (connectingTo === 'output') {
       // Dropping new output link
       const output = node.findOutputByType(firstLink.fromSlot.type)?.slot
-      console.debug('out', node, output, firstLink.fromSlot)
       if (output === undefined) {
         console.warn(
           `Could not find slot for link type: [${firstLink.fromSlot.type}].`
@@ -918,7 +915,6 @@ export class LinkConnector {
     } else if (connectingTo === 'input') {
       // Dropping new input link
       const input = node.findInputByType(firstLink.fromSlot.type)?.slot
-      console.debug('in', node, input, firstLink.fromSlot)
       if (input === undefined) {
         console.warn(
           `Could not find slot for link type: [${firstLink.fromSlot.type}].`

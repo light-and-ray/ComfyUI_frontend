@@ -3,6 +3,7 @@ import _ from 'es-toolkit/compat'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+import { isProxyWidget } from '@/core/graph/subgraph/proxyWidget'
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { transformNodeDefV1ToV2 } from '@/schemas/nodeDef/migration'
 import type {
@@ -17,11 +18,8 @@ import type {
 } from '@/schemas/nodeDefSchema'
 import { NodeSearchService } from '@/services/nodeSearchService'
 import { useSubgraphStore } from '@/stores/subgraphStore'
-import {
-  type NodeSource,
-  NodeSourceType,
-  getNodeSource
-} from '@/types/nodeSource'
+import { NodeSourceType, getNodeSource } from '@/types/nodeSource'
+import type { NodeSource } from '@/types/nodeSource'
 import type { TreeNode } from '@/types/treeExplorerTypes'
 import type { FuseSearchable, SearchAuxScore } from '@/utils/fuseUtil'
 import { buildTree } from '@/utils/treeUtil'
@@ -201,7 +199,10 @@ export const SYSTEM_NODE_DEFS: Record<string, ComfyNodeDefV1> = {
     name: 'Note',
     display_name: 'Note',
     category: 'utils',
-    input: { required: {}, optional: {} },
+    input: {
+      required: { text: ['STRING', { multiline: true }] },
+      optional: {}
+    },
     output: [],
     output_name: [],
     output_is_list: [],
@@ -213,7 +214,10 @@ export const SYSTEM_NODE_DEFS: Record<string, ComfyNodeDefV1> = {
     name: 'MarkdownNote',
     display_name: 'Markdown Note',
     category: 'utils',
-    input: { required: {}, optional: {} },
+    input: {
+      required: { text: ['STRING', { multiline: true }] },
+      optional: {}
+    },
     output: [],
     output_name: [],
     output_is_list: [],
@@ -345,11 +349,31 @@ export const useNodeDefStore = defineStore('nodeDef', () => {
     nodeDefsByDisplayName.value[nodeDef.display_name] = nodeDefImpl
   }
   function fromLGraphNode(node: LGraphNode): ComfyNodeDefImpl | null {
-    // Frontend-only nodes don't have nodeDef
-    const nodeTypeName = node.constructor?.nodeData?.name
+    const nodeTypeName = node.constructor?.nodeData?.name ?? node.type
     if (!nodeTypeName) return null
     const nodeDef = nodeDefsByName.value[nodeTypeName] ?? null
     return nodeDef
+  }
+
+  function getInputSpecForWidget(
+    node: LGraphNode,
+    widgetName: string
+  ): InputSpecV2 | undefined {
+    if (!node.isSubgraphNode()) {
+      const nodeDef = fromLGraphNode(node)
+      if (!nodeDef) return undefined
+
+      return nodeDef.inputs[widgetName]
+    }
+    const widget = node.widgets?.find((w) => w.name === widgetName)
+    //TODO: resolve spec for linked
+    if (!widget || !isProxyWidget(widget)) return undefined
+
+    const { nodeId, widgetName: subWidgetName } = widget._overlay
+    const subNode = node.subgraph.getNodeById(nodeId)
+    if (!subNode) return undefined
+
+    return getInputSpecForWidget(subNode, subWidgetName)
   }
 
   /**
@@ -424,6 +448,7 @@ export const useNodeDefStore = defineStore('nodeDef', () => {
     updateNodeDefs,
     addNodeDef,
     fromLGraphNode,
+    getInputSpecForWidget,
     registerNodeDefFilter,
     unregisterNodeDefFilter
   }

@@ -1,16 +1,25 @@
 <template>
-  <div :class="layoutClasses">
-    <IconButton
+  <div class="base-widget-layout rounded-2xl overflow-hidden relative">
+    <Button
       v-show="!isRightPanelOpen && hasRightPanel"
-      :class="rightPanelButtonClasses"
+      size="icon"
+      :class="
+        cn('absolute top-4 right-18 z-10', 'transition-opacity duration-200', {
+          'opacity-0 pointer-events-none': isRightPanelOpen || !hasRightPanel
+        })
+      "
       @click="toggleRightPanel"
     >
-      <i-lucide:panel-right class="text-sm" />
-    </IconButton>
-    <IconButton :class="closeButtonClasses" @click="closeDialog">
-      <i class="pi pi-times text-sm"></i>
-    </IconButton>
-    <div class="flex w-full h-full">
+      <i class="icon-[lucide--panel-right] text-sm" />
+    </Button>
+    <Button
+      size="lg"
+      class="absolute top-4 right-6 z-10 transition-opacity duration-200 w-10"
+      @click="closeDialog"
+    >
+      <i class="pi pi-times" />
+    </Button>
+    <div class="flex h-full w-full">
       <Transition name="slide-panel">
         <nav
           v-if="$slots.leftPanel && showLeftPanel"
@@ -24,41 +33,64 @@
         </nav>
       </Transition>
 
-      <div :class="mainContainerClasses">
-        <div class="w-full h-full flex flex-col">
-          <header v-if="$slots.header" :class="headerClasses">
-            <div class="flex-1 flex gap-2 shrink-0">
-              <IconButton v-if="!notMobile" @click="toggleLeftPanel">
-                <i-lucide:panel-left v-if="!showLeftPanel" class="text-sm" />
-                <i-lucide:panel-left-close v-else class="text-sm" />
-              </IconButton>
+      <div class="flex-1 flex bg-base-background">
+        <div class="flex h-full w-full flex-col">
+          <header
+            v-if="$slots.header"
+            class="w-full h-18 px-6 flex items-center justify-between gap-2"
+          >
+            <div class="flex flex-1 shrink-0 gap-2">
+              <Button v-if="!notMobile" size="icon" @click="toggleLeftPanel">
+                <i
+                  :class="
+                    cn(
+                      showLeftPanel
+                        ? 'icon-[lucide--panel-left]'
+                        : 'icon-[lucide--panel-left-close]'
+                    )
+                  "
+                />
+              </Button>
               <slot name="header"></slot>
             </div>
             <slot name="header-right-area"></slot>
-            <div :class="rightAreaClasses">
-              <IconButton
+            <div
+              :class="
+                cn(
+                  'flex justify-end gap-2 w-0',
+                  hasRightPanel && !isRightPanelOpen ? 'min-w-22' : 'min-w-10'
+                )
+              "
+            >
+              <Button
                 v-if="isRightPanelOpen && hasRightPanel"
+                size="icon"
                 @click="toggleRightPanel"
               >
-                <i-lucide:panel-right-close class="text-sm" />
-              </IconButton>
+                <i class="icon-[lucide--panel-right-close]" />
+              </Button>
             </div>
           </header>
 
-          <main class="flex flex-col flex-1 min-h-0">
+          <main class="flex min-h-0 flex-1 flex-col">
             <!-- Fallback title bar when no leftPanel is provided -->
             <slot name="contentFilter"></slot>
-            <h2 v-if="!$slots.leftPanel" class="text-xxl px-6 pt-2 pb-6 m-0">
+            <h2
+              v-if="!$slots.leftPanel"
+              class="text-xxl m-0 px-6 pt-2 pb-6 capitalize"
+            >
               {{ contentTitle }}
             </h2>
-            <div :class="contentContainerClasses">
+            <div
+              class="min-h-0 flex-1 px-6 pt-0 pb-10 overflow-y-auto scrollbar-custom"
+            >
               <slot name="content"></slot>
             </div>
           </main>
         </div>
         <aside
           v-if="hasRightPanel && isRightPanelOpen"
-          :class="rightPanelClasses"
+          class="w-1/4 min-w-40 max-w-80"
         >
           <slot name="rightPanel"></slot>
         </aside>
@@ -71,7 +103,7 @@
 import { useBreakpoints } from '@vueuse/core'
 import { computed, inject, ref, useSlots, watch } from 'vue'
 
-import IconButton from '@/components/button/IconButton.vue'
+import Button from '@/components/ui/button/Button.vue'
 import { OnCloseKey } from '@/types/widgetTypes'
 import { cn } from '@/utils/tailwindUtil'
 
@@ -122,50 +154,6 @@ const toggleLeftPanel = () => {
 const toggleRightPanel = () => {
   isRightPanelOpen.value = !isRightPanelOpen.value
 }
-
-// Computed classes for better readability
-const layoutClasses = cn(
-  'base-widget-layout',
-  'rounded-2xl overflow-hidden relative',
-  'bg-zinc-50 dark-theme:bg-zinc-800'
-)
-
-const rightPanelButtonClasses = computed(() => {
-  return cn('absolute top-4 right-18 z-10', 'transition-opacity duration-200', {
-    'opacity-0 pointer-events-none':
-      isRightPanelOpen.value || !hasRightPanel.value
-  })
-})
-
-const closeButtonClasses = cn(
-  'absolute top-4 right-6 z-10',
-  'transition-opacity duration-200'
-)
-
-const mainContainerClasses = cn(
-  'flex-1 flex',
-  'bg-zinc-100 dark-theme:bg-neutral-900'
-)
-
-const headerClasses = cn(
-  'w-full h-18 px-6',
-  'flex items-center justify-between gap-2'
-)
-
-const rightAreaClasses = computed(() => {
-  return cn(
-    'flex justify-end gap-2 w-0',
-    hasRightPanel.value && !isRightPanelOpen.value ? 'min-w-22' : 'min-w-10'
-  )
-})
-
-const contentContainerClasses = computed(() => {
-  return cn('min-h-0 px-6 pt-0 pb-10', 'overflow-y-auto scrollbar-hide')
-})
-
-const rightPanelClasses = computed(() => {
-  return cn('w-1/4 min-w-40 max-w-80')
-})
 </script>
 <style scoped>
 .base-widget-layout {

@@ -1,5 +1,8 @@
-import type { Positionable } from '@/lib/litegraph/src/interfaces'
-import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
+import type {
+  IContextMenuValue,
+  Positionable
+} from '@/lib/litegraph/src/interfaces'
+import type { LGraphCanvas, LGraphNode } from '@/lib/litegraph/src/litegraph'
 import type { SettingParams } from '@/platform/settings/types'
 import type { ComfyWorkflowJSON } from '@/platform/workflow/validation/schemas/workflowSchema'
 import type { Keybinding } from '@/schemas/keyBindingSchema'
@@ -28,6 +31,56 @@ type MenuCommandGroup = {
    * Note: Commands must be defined in `commands` array in the extension.
    */
   commands: string[]
+}
+
+export interface TopbarBadge {
+  text: string
+  /**
+   * Optional badge label (e.g., "BETA", "ALPHA", "NEW")
+   */
+  label?: string
+  /**
+   * Visual variant for the badge
+   * - info: Default informational badge (white label, gray background)
+   * - warning: Warning badge (orange theme, higher emphasis)
+   * - error: Error/alert badge (red theme, highest emphasis)
+   */
+  variant?: 'info' | 'warning' | 'error'
+  /**
+   * Optional icon class (e.g., "pi-exclamation-triangle")
+   * If not provided, variant will determine the default icon
+   */
+  icon?: string
+  /**
+   * Optional tooltip text to show on hover
+   */
+  tooltip?: string
+}
+
+/*
+ * Action bar button definition: add buttons to the action bar
+ */
+export interface ActionBarButton {
+  /**
+   * Icon class to display (e.g., "icon-[lucide--message-circle-question-mark]")
+   */
+  icon: string
+  /**
+   * Optional label text to display next to the icon
+   */
+  label?: string
+  /**
+   * Optional tooltip text to show on hover
+   */
+  tooltip?: string
+  /**
+   * Optional CSS classes to apply to the button
+   */
+  class?: string
+  /**
+   * Click handler for the button
+   */
+  onClick: () => void
 }
 
 export type MissingNodeType =
@@ -72,6 +125,14 @@ export interface ComfyExtension {
    */
   aboutPageBadges?: AboutPageBadge[]
   /**
+   * Badges to add to the top bar
+   */
+  topbarBadges?: TopbarBadge[]
+  /**
+   * Buttons to add to the action bar
+   */
+  actionBarButtons?: ActionBarButton[]
+  /**
    * Allows any initialisation, e.g. loading resources. Called after the canvas is created but before nodes are added
    * @param app The ComfyUI app instance
    */
@@ -105,6 +166,20 @@ export interface ComfyExtension {
    * @returns An array of command ids to add to the selection toolbox
    */
   getSelectionToolboxCommands?(selectedItem: Positionable): string[]
+
+  /**
+   * Allows the extension to add context menu items to canvas right-click menus
+   * @param canvas The canvas instance
+   * @returns An array of context menu items to add (null values represent separators)
+   */
+  getCanvasMenuItems?(canvas: LGraphCanvas): (IContextMenuValue | null)[]
+
+  /**
+   * Allows the extension to add context menu items to node right-click menus
+   * @param node The node being right-clicked
+   * @returns An array of context menu items to add (null values represent separators)
+   */
+  getNodeMenuItems?(node: LGraphNode): (IContextMenuValue | null)[]
 
   /**
    * Allows the extension to add additional handling to the node before it is registered with **LGraph**
@@ -173,6 +248,18 @@ export interface ComfyExtension {
    * This is an experimental API and may be changed or removed in the future.
    */
   onAuthUserResolved?(user: AuthUserInfo, app: ComfyApp): Promise<void> | void
+
+  /**
+   * Fired whenever the auth token is refreshed.
+   * This is an experimental API and may be changed or removed in the future.
+   */
+  onAuthTokenRefreshed?(): Promise<void> | void
+
+  /**
+   * Fired when user logs out.
+   * This is an experimental API and may be changed or removed in the future.
+   */
+  onAuthUserLogout?(): Promise<void> | void
 
   [key: string]: any
 }

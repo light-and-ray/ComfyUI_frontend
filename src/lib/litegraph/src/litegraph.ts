@@ -1,8 +1,12 @@
 import type { ContextMenu } from './ContextMenu'
 import type { LGraphNode } from './LGraphNode'
 import { LiteGraphGlobal } from './LiteGraphGlobal'
-import type { ConnectingLink, Point } from './interfaces'
-import type { IContextMenuOptions, Size } from './interfaces'
+import type {
+  ConnectingLink,
+  IContextMenuOptions,
+  Point,
+  Size
+} from './interfaces'
 import { loadPolyfills } from './polyfills'
 import type { CanvasEventDetail } from './types/events'
 import type { RenderShape, TitleMode } from './types/globalEnums'
@@ -48,7 +52,6 @@ export interface LinkReleaseContextExtended {
   links: ConnectingLink[]
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface LiteGraphCanvasEvent extends CustomEvent<CanvasEventDetail> {}
 
 export interface LGraphNodeConstructor<T extends LGraphNode = LGraphNode> {
@@ -59,7 +62,7 @@ export interface LGraphNodeConstructor<T extends LGraphNode = LGraphNode> {
   size?: Size
   min_height?: number
   slot_start_y?: number
-  widgets_info?: any
+  widgets_info?: Record<string, unknown>
   collapsable?: boolean
   color?: string
   bgcolor?: string
@@ -99,7 +102,12 @@ export type {
   Positionable,
   Size
 } from './interfaces'
-export { LGraph } from './LGraph'
+export {
+  LGraph,
+  type LGraphTriggerAction,
+  type LGraphTriggerParam
+} from './LGraph'
+export type { LGraphTriggerEvent } from './types/graphTriggers'
 export { BadgePosition, LGraphBadge } from './LGraphBadge'
 export { LGraphCanvas } from './LGraphCanvas'
 export { LGraphGroup } from './LGraphGroup'
@@ -140,7 +148,7 @@ export { BaseWidget } from './widgets/BaseWidget'
 
 export { LegacyWidget } from './widgets/LegacyWidget'
 
-export { isComboWidget } from './widgets/widgetMap'
+export { isComboWidget, isAssetWidget } from './widgets/widgetMap'
 // Additional test-specific exports
 export { LGraphButton } from './LGraphButton'
 export { MovingOutputLink } from './canvas/MovingOutputLink'

@@ -1,10 +1,8 @@
-import { computed, inject, ref } from 'vue'
+import { storeToRefs } from 'pinia'
+import { computed, toValue } from 'vue'
+import type { MaybeRefOrGetter } from 'vue'
 
-import {
-  ExecutingNodeIdsKey,
-  NodeProgressStatesKey
-} from '@/renderer/core/canvas/injectionKeys'
-import type { NodeProgressState } from '@/schemas/apiSchema'
+import { useExecutionStore } from '@/stores/executionStore'
 
 /**
  * Composable for managing execution state of Vue-based nodes
@@ -12,26 +10,29 @@ import type { NodeProgressState } from '@/schemas/apiSchema'
  * Provides reactive access to execution state and progress for a specific node
  * by injecting execution data from the parent GraphCanvas provider.
  *
- * @param nodeId - The ID of the node to track execution state for
+ * @param nodeLocatorIdMaybe - Locator ID (root or subgraph scoped) of the node to track
  * @returns Object containing reactive execution state and progress
  */
-export const useNodeExecutionState = (nodeId: string) => {
-  const executingNodeIds = inject(ExecutingNodeIdsKey, ref(new Set<string>()))
-  const nodeProgressStates = inject(
-    NodeProgressStatesKey,
-    ref<Record<string, NodeProgressState>>({})
+export const useNodeExecutionState = (
+  nodeLocatorIdMaybe: MaybeRefOrGetter<string | undefined>
+) => {
+  const locatorId = computed(() => toValue(nodeLocatorIdMaybe) ?? '')
+  const { nodeLocationProgressStates, isIdle } =
+    storeToRefs(useExecutionStore())
+
+  const progressState = computed(() => {
+    const id = locatorId.value
+    return id ? nodeLocationProgressStates.value[id] : undefined
+  })
+
+  const executing = computed(
+    () => !isIdle.value && progressState.value?.state === 'running'
   )
 
-  const executing = computed(() => {
-    return executingNodeIds.value.has(nodeId)
-  })
-
   const progress = computed(() => {
-    const state = nodeProgressStates.value[nodeId]
-    return state?.max > 0 ? state.value / state.max : undefined
+    const state = progressState.value
+    return state && state.max > 0 ? state.value / state.max : undefined
   })
-
-  const progressState = computed(() => nodeProgressStates.value[nodeId])
 
   const progressPercentage = computed(() => {
     const prog = progress.value

@@ -1,9 +1,8 @@
+import { t } from '@/i18n'
+
 import type { IImageCompareWidget } from '../types/widgets'
-import {
-  BaseWidget,
-  type DrawWidgetOptions,
-  type WidgetEventOptions
-} from './BaseWidget'
+import { BaseWidget } from './BaseWidget'
+import type { DrawWidgetOptions, WidgetEventOptions } from './BaseWidget'
 
 /**
  * Widget for comparing two images side by side
@@ -32,7 +31,7 @@ export class ImageCompareWidget
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
-    const text = 'ImageCompare: Vue-only'
+    const text = `ImageCompare: ${t('widgets.node2only')}`
     ctx.fillText(text, width / 2, y + height / 2)
 
     Object.assign(ctx, {

@@ -2,6 +2,8 @@ import {
   SUBGRAPH_INPUT_ID,
   SUBGRAPH_OUTPUT_ID
 } from '@/lib/litegraph/src/constants'
+import type { SubgraphInput } from '@/lib/litegraph/src/subgraph/SubgraphInput'
+import type { SubgraphOutput } from '@/lib/litegraph/src/subgraph/SubgraphOutput'
 import { useLayoutMutations } from '@/renderer/core/layout/operations/layoutMutations'
 import { LayoutSource } from '@/renderer/core/layout/types'
 
@@ -14,13 +16,10 @@ import type {
   ISlotType,
   LinkNetwork,
   LinkSegment,
+  Point,
   ReadonlyLinkNetwork
 } from './interfaces'
-import type {
-  Serialisable,
-  SerialisableLLink,
-  SubgraphIO
-} from './types/serialisation'
+import type { Serialisable, SerialisableLLink } from './types/serialisation'
 
 const layoutMutations = useLayoutMutations()
 
@@ -54,9 +53,9 @@ interface BaseResolvedConnection {
   /** The output the link is connected to (mutually exclusive with {@link subgraphInput}) */
   output?: INodeOutputSlot
   /** The subgraph output the link is connected to (mutually exclusive with {@link input}) */
-  subgraphOutput?: SubgraphIO
+  subgraphOutput?: SubgraphOutput
   /** The subgraph input the link is connected to (mutually exclusive with {@link output}) */
-  subgraphInput?: SubgraphIO
+  subgraphInput?: SubgraphInput
 }
 
 interface ResolvedNormalInput {
@@ -75,13 +74,13 @@ interface ResolvedSubgraphInput {
   inputNode?: undefined
   /** The actual input slot the link is connected to (mutually exclusive with {@link subgraphOutput}) */
   input?: undefined
-  subgraphOutput: SubgraphIO
+  subgraphOutput: SubgraphOutput
 }
 
 interface ResolvedSubgraphOutput {
   outputNode?: undefined
   output?: undefined
-  subgraphInput: SubgraphIO
+  subgraphInput: SubgraphInput
 }
 
 type BasicReadonlyNetwork = Pick<
@@ -109,7 +108,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
   data?: number | string | boolean | { toToolTip?(): string }
   _data?: unknown
   /** Centre point of the link, calculated during render only - can be inaccurate */
-  _pos: Float32Array
+  _pos: Point
   /** @todo Clean up - never implemented in comfy. */
   _last_time?: number
   /** The last canvas 2D path that was used to render this link */
@@ -171,7 +170,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
 
     this._data = null
     // center
-    this._pos = new Float32Array(2)
+    this._pos = [0, 0]
   }
 
   /** @deprecated Use {@link LLink.create} */
@@ -205,7 +204,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
     network: Pick<ReadonlyLinkNetwork, 'reroutes'>,
     linkSegment: LinkSegment
   ): Reroute[] {
-    if (!linkSegment.parentId) return []
+    if (linkSegment.parentId === undefined) return []
     return network.reroutes.get(linkSegment.parentId)?.getReroutes() ?? []
   }
 
@@ -229,7 +228,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
     linkSegment: LinkSegment,
     rerouteId: RerouteId
   ): Reroute | null | undefined {
-    if (!linkSegment.parentId) return
+    if (linkSegment.parentId === undefined) return
     return network.reroutes
       .get(linkSegment.parentId)
       ?.findNextReroute(rerouteId)
@@ -311,7 +310,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
     const inputNode =
       this.target_id === -1
         ? undefined
-        : network.getNodeById(this.target_id) ?? undefined
+        : (network.getNodeById(this.target_id) ?? undefined)
     const input = inputNode?.inputs[this.target_slot]
     const subgraphInput = this.originIsIoNode
       ? network.inputNode?.slots[this.origin_slot]
@@ -323,7 +322,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
     const outputNode =
       this.origin_id === -1
         ? undefined
-        : network.getNodeById(this.origin_id) ?? undefined
+        : (network.getNodeById(this.origin_id) ?? undefined)
     const output = outputNode?.outputs[this.origin_slot]
     const subgraphOutput = this.targetIsIoNode
       ? network.outputNode?.slots[this.target_slot]
@@ -417,18 +416,6 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
    * If `input` or `output`, reroutes will not be automatically removed, and retain a connection to the input or output, respectively.
    */
   disconnect(network: LinkNetwork, keepReroutes?: 'input' | 'output'): void {
-    // Clean up the target node's input slot
-    if (this.target_id !== -1) {
-      const targetNode = network.getNodeById(this.target_id)
-      if (targetNode) {
-        const targetInput = targetNode.inputs?.[this.target_slot]
-        if (targetInput && targetInput.link === this.id) {
-          targetInput.link = null
-          targetNode.setDirtyCanvas?.(true, false)
-        }
-      }
-    }
-
     const reroutes = LLink.getReroutes(network, this)
 
     const lastReroute = reroutes.at(-1)
@@ -498,7 +485,7 @@ export class LLink implements LinkSegment, Serialisable<SerialisableLLink> {
       target_slot: this.target_slot,
       type: this.type
     }
-    if (this.parentId) copy.parentId = this.parentId
+    if (this.parentId !== undefined) copy.parentId = this.parentId
     return copy
   }
 }

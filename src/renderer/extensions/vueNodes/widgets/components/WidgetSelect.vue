@@ -1,68 +1,126 @@
 <template>
-  <WidgetLayoutField :widget>
-    <Select
-      v-model="localValue"
-      :options="selectOptions"
-      v-bind="combinedProps"
-      :disabled="readonly"
-      class="w-full text-xs bg-[#F9F8F4] dark-theme:bg-[#0E0E12] border-[#E1DED5] dark-theme:border-[#15161C] !rounded-lg"
-      size="small"
-      :pt="{
-        option: 'text-xs'
-      }"
-      @update:model-value="onChange"
-    />
-  </WidgetLayoutField>
+  <WidgetSelectDropdown
+    v-if="isDropdownUIWidget"
+    v-model="modelValue"
+    :widget
+    :node-type="widget.nodeType ?? nodeType"
+    :asset-kind="assetKind"
+    :allow-upload="allowUpload"
+    :upload-folder="uploadFolder"
+    :is-asset-mode="isAssetMode"
+    :default-layout-mode="defaultLayoutMode"
+  />
+  <WidgetWithControl
+    v-else-if="widget.controlWidget"
+    v-model="modelValue"
+    :component="WidgetSelectDefault"
+    :widget="widget as StringControlWidget"
+  />
+  <WidgetSelectDefault v-else v-model="modelValue" :widget />
 </template>
 
 <script setup lang="ts">
-import Select from 'primevue/select'
 import { computed } from 'vue'
 
-import { useWidgetValue } from '@/composables/graph/useWidgetValue'
-import { useTransformCompatOverlayProps } from '@/composables/useTransformCompatOverlayProps'
-import type { SimplifiedWidget } from '@/types/simplifiedWidget'
-import {
-  PANEL_EXCLUDED_PROPS,
-  filterWidgetProps
-} from '@/utils/widgetPropFilter'
+import { assetService } from '@/platform/assets/services/assetService'
+import { isCloud } from '@/platform/distribution/types'
+import { useSettingStore } from '@/platform/settings/settingStore'
+import WidgetSelectDefault from '@/renderer/extensions/vueNodes/widgets/components/WidgetSelectDefault.vue'
+import WidgetSelectDropdown from '@/renderer/extensions/vueNodes/widgets/components/WidgetSelectDropdown.vue'
+import WidgetWithControl from '@/renderer/extensions/vueNodes/widgets/components/WidgetWithControl.vue'
+import type { LayoutMode } from '@/renderer/extensions/vueNodes/widgets/components/form/dropdown/types'
+import type { ResultItemType } from '@/schemas/apiSchema'
+import { isComboInputSpec } from '@/schemas/nodeDef/nodeDefSchemaV2'
+import type { ComboInputSpec } from '@/schemas/nodeDef/nodeDefSchemaV2'
+import type {
+  SimplifiedControlWidget,
+  SimplifiedWidget
+} from '@/types/simplifiedWidget'
+import type { AssetKind } from '@/types/widgetTypes'
 
-import WidgetLayoutField from './layout/WidgetLayoutField.vue'
+type StringControlWidget = SimplifiedControlWidget<string | undefined>
 
 const props = defineProps<{
-  widget: SimplifiedWidget<string | number | undefined>
-  modelValue: string | number | undefined
-  readonly?: boolean
+  widget: SimplifiedWidget<string | undefined>
+  nodeType?: string
 }>()
 
-const emit = defineEmits<{
-  'update:modelValue': [value: string | number | undefined]
-}>()
+const modelValue = defineModel<string | undefined>()
 
-// Use the composable for consistent widget value handling
-const { localValue, onChange } = useWidgetValue({
-  widget: props.widget,
-  modelValue: props.modelValue,
-  defaultValue: props.widget.options?.values?.[0] || '',
-  emit
+const comboSpec = computed<ComboInputSpec | undefined>(() => {
+  if (props.widget.spec && isComboInputSpec(props.widget.spec)) {
+    return props.widget.spec
+  }
+  return undefined
 })
 
-// Transform compatibility props for overlay positioning
-const transformCompatProps = useTransformCompatOverlayProps()
-
-const combinedProps = computed(() => ({
-  ...filterWidgetProps(props.widget.options, PANEL_EXCLUDED_PROPS),
-  ...transformCompatProps.value
-}))
-
-// Extract select options from widget options
-const selectOptions = computed(() => {
-  const options = props.widget.options
-
-  if (options?.values && Array.isArray(options.values)) {
-    return options.values
+const specDescriptor = computed<{
+  kind: AssetKind
+  allowUpload: boolean
+  folder: ResultItemType | undefined
+}>(() => {
+  const spec = comboSpec.value
+  if (!spec) {
+    return {
+      kind: 'unknown',
+      allowUpload: false,
+      folder: undefined
+    }
   }
 
-  return []
+  const {
+    image_upload,
+    animated_image_upload,
+    video_upload,
+    image_folder,
+    audio_upload
+  } = spec
+
+  let kind: AssetKind = 'unknown'
+  if (video_upload) {
+    kind = 'video'
+  } else if (image_upload || animated_image_upload) {
+    kind = 'image'
+  } else if (audio_upload) {
+    kind = 'audio'
+  }
+  // TODO: add support for models (checkpoints, VAE, LoRAs, etc.) -- get widgetType from spec
+
+  const allowUpload =
+    image_upload === true ||
+    animated_image_upload === true ||
+    video_upload === true ||
+    audio_upload === true
+  return {
+    kind,
+    allowUpload,
+    folder: image_folder
+  }
+})
+
+const isAssetMode = computed(() => {
+  if (isCloud) {
+    const settingStore = useSettingStore()
+    const isUsingAssetAPI = settingStore.get('Comfy.Assets.UseAssetAPI')
+    const isEligible =
+      assetService.isAssetBrowserEligible(props.nodeType, props.widget.name) ||
+      props.widget.type === 'asset'
+
+    return isUsingAssetAPI && isEligible
+  }
+
+  return false
+})
+
+const assetKind = computed(() => specDescriptor.value.kind)
+const isDropdownUIWidget = computed(
+  () => isAssetMode.value || assetKind.value !== 'unknown'
+)
+const allowUpload = computed(() => specDescriptor.value.allowUpload)
+const uploadFolder = computed<ResultItemType>(() => {
+  return specDescriptor.value.folder ?? 'input'
+})
+const defaultLayoutMode = computed<LayoutMode>(() => {
+  return isAssetMode.value ? 'list' : 'grid'
 })
 </script>

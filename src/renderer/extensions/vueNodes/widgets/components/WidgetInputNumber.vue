@@ -1,27 +1,46 @@
 <script setup lang="ts">
-import type { SimplifiedWidget } from '@/types/simplifiedWidget'
+import { computed } from 'vue'
+
+import type {
+  SimplifiedControlWidget,
+  SimplifiedWidget
+} from '@/types/simplifiedWidget'
 
 import WidgetInputNumberInput from './WidgetInputNumberInput.vue'
 import WidgetInputNumberSlider from './WidgetInputNumberSlider.vue'
+import WidgetWithControl from './WidgetWithControl.vue'
 
-defineProps<{
+const props = defineProps<{
   widget: SimplifiedWidget<number>
-  readonly?: boolean
 }>()
 
 const modelValue = defineModel<number>({ default: 0 })
+
+const hasControlAfterGenerate = computed(() => {
+  return !!props.widget.controlWidget
+})
 </script>
 
 <template>
+  <WidgetWithControl
+    v-if="hasControlAfterGenerate"
+    v-model="modelValue"
+    :widget="widget as SimplifiedControlWidget<number>"
+    :component="
+      widget.type === 'slider'
+        ? WidgetInputNumberSlider
+        : WidgetInputNumberInput
+    "
+  />
   <component
     :is="
       widget.type === 'slider'
         ? WidgetInputNumberSlider
         : WidgetInputNumberInput
     "
+    v-else
     v-model="modelValue"
     :widget="widget"
-    :readonly="readonly"
     v-bind="$attrs"
   />
 </template>

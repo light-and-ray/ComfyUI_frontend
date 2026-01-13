@@ -4,21 +4,21 @@
       value: t('selectionToolbox.executeButton.tooltip'),
       showDelay: 1000
     }"
-    class="dark-theme:bg-[#0B8CE9] bg-[#31B9F4] size-8 !p-0"
-    text
+    variant="primary"
+    :aria-label="t('selectionToolbox.executeButton.tooltip')"
     @mouseenter="() => handleMouseEnter()"
     @mouseleave="() => handleMouseLeave()"
     @click="handleClick"
   >
-    <i-lucide:play class="fill-path-white w-4 h-4" />
+    <i class="icon-[lucide--play]" />
   </Button>
 </template>
 
 <script setup lang="ts">
-import Button from 'primevue/button'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import Button from '@/components/ui/button/Button.vue'
 import { useSelectionState } from '@/composables/graph/useSelectionState'
 import type { LGraphNode } from '@/lib/litegraph/src/litegraph'
 import { useCanvasStore } from '@/renderer/core/canvas/canvasStore'
@@ -64,9 +64,3 @@ const handleClick = async () => {
   await commandStore.execute('Comfy.QueueSelectedOutputNodes')
 }
 </script>
-<style scoped>
-:deep.fill-path-white > path {
-  fill: white;
-  stroke: unset;
-}
-</style>

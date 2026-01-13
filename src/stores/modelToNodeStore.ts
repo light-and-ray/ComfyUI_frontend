@@ -25,18 +25,52 @@ export const useModelToNodeStore = defineStore('modelToNode', () => {
   const haveDefaultsLoaded = ref(false)
 
   /** Internal computed for reactive caching of registered node types */
-  const registeredNodeTypes = computed(() => {
-    return new Set(
+  const registeredNodeTypes = computed<Record<string, string>>(() => {
+    return Object.fromEntries(
       Object.values(modelToNodeMap.value)
         .flat()
-        .map((provider) => provider.nodeDef.name)
+        .filter((provider) => !!provider.nodeDef)
+        .map((provider) => [provider.nodeDef.name, provider.key])
     )
   })
 
+  /** Internal computed for efficient reverse lookup: nodeType -> category */
+  const nodeTypeToCategory = computed(() => {
+    const lookup: Record<string, string> = {}
+    for (const [category, providers] of Object.entries(modelToNodeMap.value)) {
+      for (const provider of providers) {
+        // Extension nodes may not be installed
+        if (!provider.nodeDef) continue
+        // Only store the first category for each node type (matches current assetService behavior)
+        if (!lookup[provider.nodeDef.name]) {
+          lookup[provider.nodeDef.name] = category
+        }
+      }
+    }
+    return lookup
+  })
+
   /** Get set of all registered node types for efficient lookup */
-  function getRegisteredNodeTypes(): Set<string> {
+  function getRegisteredNodeTypes(): Record<string, string> {
     registerDefaults()
     return registeredNodeTypes.value
+  }
+
+  /**
+   * Get the category for a given node type.
+   * Performs efficient O(1) lookup using cached reverse map.
+   * @param nodeType The node type name to find the category for
+   * @returns The category name, or undefined if not found
+   */
+  function getCategoryForNodeType(nodeType: string): string | undefined {
+    registerDefaults()
+
+    // Handle invalid input gracefully
+    if (!nodeType || typeof nodeType !== 'string') {
+      return undefined
+    }
+
+    return nodeTypeToCategory.value[nodeType]
   }
 
   /**
@@ -67,6 +101,7 @@ export const useModelToNodeStore = defineStore('modelToNode', () => {
     nodeProvider: ModelNodeProvider
   ) {
     registerDefaults()
+    if (!nodeProvider.nodeDef) return
     if (!modelToNodeMap.value[modelType]) {
       modelToNodeMap.value[modelType] = []
     }
@@ -100,15 +135,30 @@ export const useModelToNodeStore = defineStore('modelToNode', () => {
     quickRegister('loras', 'LoraLoaderModelOnly', 'lora_name')
     quickRegister('vae', 'VAELoader', 'vae_name')
     quickRegister('controlnet', 'ControlNetLoader', 'control_net_name')
-    quickRegister('unet', 'UNETLoader', 'unet_name')
+    quickRegister('diffusion_models', 'UNETLoader', 'unet_name')
     quickRegister('upscale_models', 'UpscaleModelLoader', 'model_name')
-    quickRegister('style_models', 'StyleModelLoader', 'style_model')
+    quickRegister('style_models', 'StyleModelLoader', 'style_model_name')
     quickRegister('gligen', 'GLIGENLoader', 'gligen_name')
+    quickRegister('clip_vision', 'CLIPVisionLoader', 'clip_name')
+    quickRegister('text_encoders', 'CLIPLoader', 'clip_name')
+    quickRegister('audio_encoders', 'AudioEncoderLoader', 'audio_encoder_name')
+    quickRegister('model_patches', 'ModelPatchLoader', 'name')
+    quickRegister(
+      'animatediff_models',
+      'ADE_LoadAnimateDiffModel',
+      'model_name'
+    )
+    quickRegister(
+      'animatediff_motion_lora',
+      'ADE_AnimateDiffLoRALoader',
+      'name'
+    )
   }
 
   return {
     modelToNodeMap,
     getRegisteredNodeTypes,
+    getCategoryForNodeType,
     getNodeProvider,
     getAllNodeProviders,
     registerNodeProvider,

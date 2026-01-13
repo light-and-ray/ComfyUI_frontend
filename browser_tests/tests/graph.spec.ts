@@ -2,6 +2,10 @@ import { expect } from '@playwright/test'
 
 import { comfyPageFixture as test } from '../fixtures/ComfyPage'
 
+test.beforeEach(async ({ comfyPage }) => {
+  await comfyPage.setSetting('Comfy.UseNewMenu', 'Disabled')
+})
+
 test.describe('Graph', () => {
   // Should be able to fix link input slot index after swap the input order
   // Ref: https://github.com/Comfy-Org/ComfyUI_frontend/issues/3348
@@ -15,6 +19,7 @@ test.describe('Graph', () => {
   })
 
   test('Validate workflow links', async ({ comfyPage }) => {
+    await comfyPage.setSetting('Comfy.Validation.Workflows', true)
     await comfyPage.loadWorkflow('links/bad_link')
     await expect(comfyPage.getVisibleToastCount()).resolves.toBe(2)
   })

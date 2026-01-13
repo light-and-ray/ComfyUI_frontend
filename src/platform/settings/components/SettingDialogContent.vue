@@ -1,11 +1,12 @@
 <template>
   <div class="settings-container">
-    <ScrollPanel class="settings-sidebar shrink-0 p-2 w-48 2xl:w-64">
+    <ScrollPanel class="settings-sidebar w-48 shrink-0 p-2 2xl:w-64">
       <SearchBox
         v-model:model-value="searchQuery"
-        class="settings-search-box w-full mb-2"
+        class="settings-search-box mb-2 w-full"
         :placeholder="$t('g.searchSettings') + '...'"
         :debounce-time="128"
+        autofocus
         @search="handleSearch"
       />
       <Listbox
@@ -19,14 +20,14 @@
           (option: SettingTreeNode) =>
             !queryIsEmpty && !searchResultsCategories.has(option.label ?? '')
         "
-        class="border-none w-full"
+        class="w-full border-none"
       >
         <template #optiongroup>
           <Divider class="my-0" />
         </template>
       </Listbox>
     </ScrollPanel>
-    <Divider layout="vertical" class="mx-1 2xl:mx-4 hidden md:flex" />
+    <Divider layout="vertical" class="mx-1 hidden md:flex 2xl:mx-4" />
     <Divider layout="horizontal" class="flex md:hidden" />
     <Tabs :value="tabValue" :lazy="true" class="settings-content h-full w-full">
       <TabPanels class="settings-tab-panels h-full w-full pr-0">
@@ -106,10 +107,17 @@ const {
 
 const authActions = useFirebaseAuthActions()
 
+// Get max sortOrder from settings in a group
+const getGroupSortOrder = (group: SettingTreeNode): number =>
+  Math.max(0, ...flattenTree<SettingParams>(group).map((s) => s.sortOrder ?? 0))
+
 // Sort groups for a category
 const sortedGroups = (category: SettingTreeNode): ISettingGroup[] => {
   return [...(category.children ?? [])]
-    .sort((a, b) => a.label.localeCompare(b.label))
+    .sort((a, b) => {
+      const orderDiff = getGroupSortOrder(b) - getGroupSortOrder(a)
+      return orderDiff !== 0 ? orderDiff : a.label.localeCompare(b.label)
+    })
     .map((group) => ({
       label: group.label,
       settings: flattenTree<SettingParams>(group).sort((a, b) => {
@@ -132,7 +140,7 @@ const searchResults = computed<ISettingGroup[]>(() =>
 )
 
 const tabValue = computed<string>(() =>
-  inSearch.value ? 'Search Results' : activeCategory.value?.label ?? ''
+  inSearch.value ? 'Search Results' : (activeCategory.value?.label ?? '')
 )
 
 // Don't allow null category to be set outside of search.

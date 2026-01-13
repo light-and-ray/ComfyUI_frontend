@@ -12,10 +12,13 @@ import { LayoutSource } from '@/renderer/core/layout/types'
 import type { DragAndScaleState } from './DragAndScale'
 import { LGraphCanvas } from './LGraphCanvas'
 import { LGraphGroup } from './LGraphGroup'
-import { LGraphNode, type NodeId } from './LGraphNode'
-import { LLink, type LinkId } from './LLink'
+import { LGraphNode } from './LGraphNode'
+import type { NodeId } from './LGraphNode'
+import { LLink } from './LLink'
+import type { LinkId, SerialisedLLinkArray } from './LLink'
 import { MapProxyHandler } from './MapProxyHandler'
-import { Reroute, type RerouteId } from './Reroute'
+import { Reroute } from './Reroute'
+import type { RerouteId } from './Reroute'
 import { CustomEventTarget } from './infrastructure/CustomEventTarget'
 import type { LGraphEventMap } from './infrastructure/LGraphEventMap'
 import type { SubgraphEventMap } from './infrastructure/SubgraphEventMap'
@@ -55,6 +58,12 @@ import {
 } from './subgraph/subgraphUtils'
 import { Alignment, LGraphEventMode } from './types/globalEnums'
 import type {
+  LGraphTriggerAction,
+  LGraphTriggerEvent,
+  LGraphTriggerHandler,
+  LGraphTriggerParam
+} from './types/graphTriggers'
+import type {
   ExportedSubgraph,
   ExposedWidget,
   ISerialisedGraph,
@@ -64,6 +73,13 @@ import type {
   SerialisableReroute
 } from './types/serialisation'
 import { getAllNestedItems } from './utils/collections'
+
+export type {
+  LGraphTriggerAction,
+  LGraphTriggerParam
+} from './types/graphTriggers'
+
+export type RendererType = 'LG' | 'Vue'
 
 export interface LGraphState {
   lastGroupId: number
@@ -82,14 +98,28 @@ type ParamsArray<
 /** Configuration used by {@link LGraph} `config`. */
 export interface LGraphConfig {
   /** @deprecated Legacy config - unused */
-  align_to_grid?: any
-  links_ontop?: any
+  align_to_grid?: boolean
+  links_ontop?: boolean
+}
+
+export interface GroupNodeWorkflowData {
+  external: (number | string)[][]
+  links: SerialisedLLinkArray[]
+  nodes: {
+    index?: number
+    type?: string
+    inputs?: unknown[]
+    outputs?: unknown[]
+  }[]
+  config?: Record<number, unknown>
 }
 
 export interface LGraphExtra extends Dictionary<unknown> {
   reroutes?: SerialisableReroute[]
   linkExtensions?: { id: number; parentId: number | undefined }[]
   ds?: DragAndScaleState
+  workflowRendererVersion?: RendererType
+  groupNodes?: Record<string, GroupNodeWorkflowData>
 }
 
 export interface BaseLGraph {
@@ -209,15 +239,15 @@ export class LGraph
   /** Internal only.  Not required for serialisation; calculated on deserialise. */
   #lastFloatingLinkId: number = 0
 
-  #floatingLinks: Map<LinkId, LLink> = new Map()
+  private readonly floatingLinksInternal: Map<LinkId, LLink> = new Map()
   get floatingLinks(): ReadonlyMap<LinkId, LLink> {
-    return this.#floatingLinks
+    return this.floatingLinksInternal
   }
 
-  #reroutes = new Map<RerouteId, Reroute>()
+  private readonly reroutesInternal = new Map<RerouteId, Reroute>()
   /** All reroutes in this graph. */
   public get reroutes(): Map<RerouteId, Reroute> {
-    return this.#reroutes
+    return this.reroutesInternal
   }
 
   get rootGraph(): LGraph {
@@ -254,7 +284,7 @@ export class LGraph
   onExecuteStep?(): void
   onNodeAdded?(node: LGraphNode): void
   onNodeRemoved?(node: LGraphNode): void
-  onTrigger?(action: string, param: unknown): void
+  onTrigger?: LGraphTriggerHandler
   onBeforeChange?(graph: LGraph, info?: LGraphNode): void
   onAfterChange?(graph: LGraph, info?: LGraphNode | null): void
   onConnectionChange?(node: LGraphNode): void
@@ -274,8 +304,6 @@ export class LGraph
    * @param o data from previous serialization [optional]
    */
   constructor(o?: ISerialisedGraph | SerialisableGraph) {
-    if (LiteGraph.debug) console.log('Graph created')
-
     /** @see MapProxyHandler */
     const links = this._links
     MapProxyHandler.bindAllMethods(links)
@@ -328,7 +356,7 @@ export class LGraph
 
     this._links.clear()
     this.reroutes.clear()
-    this.#floatingLinks.clear()
+    this.floatingLinksInternal.clear()
 
     this.#lastFloatingLinkId = 0
 
@@ -532,7 +560,7 @@ export class LGraph
         this.errors_in_execution = true
         if (LiteGraph.throw_errors) throw error
 
-        if (LiteGraph.debug) console.log('Error during execution:', error)
+        if (LiteGraph.debug) console.error('Error during execution:', error)
         this.stop()
       }
     }
@@ -1128,7 +1156,7 @@ export class LGraph
   /**
    * Snaps the provided items to a grid.
    *
-   * Item positions are reounded to the nearest multiple of {@link LiteGraph.CANVAS_GRID_SIZE}.
+   * Item positions are rounded to the nearest multiple of {@link LiteGraph.CANVAS_GRID_SIZE}.
    *
    * When {@link LiteGraph.alwaysSnapToGrid} is enabled
    * and the grid size is falsy, a default of 1 is used.
@@ -1167,7 +1195,7 @@ export class LGraph
       const ctor = LiteGraph.registered_node_types[node.type]
       if (node.constructor == ctor) continue
 
-      console.log('node being replaced by newer version:', node.type)
+      console.warn('node being replaced by newer version:', node.type)
       const newnode = LiteGraph.createNode(node.type)
       if (!newnode) continue
       _nodes[i] = newnode
@@ -1182,12 +1210,27 @@ export class LGraph
   }
 
   // ********** GLOBALS *****************
+  trigger<A extends LGraphTriggerAction>(
+    action: A,
+    param: LGraphTriggerParam<A>
+  ): void
+  trigger(action: string, param: unknown): void
   trigger(action: string, param: unknown) {
-    this.onTrigger?.(action, param)
+    // Convert to discriminated union format for typed handlers
+    const validEventTypes = new Set([
+      'node:slot-links:changed',
+      'node:slot-errors:changed',
+      'node:property:changed'
+    ])
+
+    if (validEventTypes.has(action) && param && typeof param === 'object') {
+      this.onTrigger?.({ type: action, ...param } as LGraphTriggerEvent)
+    }
+    // Don't handle unknown events - just ignore them
   }
 
   /** @todo Clean up - never implemented. */
-  triggerInput(name: string, value: any): void {
+  triggerInput(name: string, value: unknown): void {
     const nodes = this.findNodesByTitle(name)
     for (const node of nodes) {
       // @ts-expect-error - onTrigger method may not exist on all node types
@@ -1196,7 +1239,7 @@ export class LGraph
   }
 
   /** @todo Clean up - never implemented. */
-  setCallback(name: string, func: any): void {
+  setCallback(name: string, func?: () => void): void {
     const nodes = this.findNodesByTitle(name)
     for (const node of nodes) {
       // @ts-expect-error - setTrigger method may not exist on all node types
@@ -1229,9 +1272,6 @@ export class LGraph
 
   /* Called when something visually changed (not the graph!) */
   change(): void {
-    if (LiteGraph.debug) {
-      console.log('Graph changed')
-    }
     this.canvasAction((c) => c.setDirty(true, true))
     this.on_change?.(this)
   }
@@ -1244,7 +1284,7 @@ export class LGraph
     if (link.id === -1) {
       link.id = ++this.#lastFloatingLinkId
     }
-    this.#floatingLinks.set(link.id, link)
+    this.floatingLinksInternal.set(link.id, link)
 
     const slot =
       link.target_id !== -1
@@ -1267,7 +1307,7 @@ export class LGraph
   }
 
   removeFloatingLink(link: LLink): void {
-    this.#floatingLinks.delete(link.id)
+    this.floatingLinksInternal.delete(link.id)
 
     const slot =
       link.target_id !== -1
@@ -1482,6 +1522,22 @@ export class LGraph
   } {
     if (items.size === 0)
       throw new Error('Cannot convert to subgraph: nothing to convert')
+
+    // Record state before conversion for proper undo support
+    this.beforeChange()
+
+    try {
+      return this._convertToSubgraphImpl(items)
+    } finally {
+      // Mark state change complete for proper undo support
+      this.afterChange()
+    }
+  }
+
+  private _convertToSubgraphImpl(items: Set<Positionable>): {
+    subgraph: Subgraph
+    node: SubgraphNode
+  } {
     const { state, revision, config } = this
     const firstChild = [...items][0]
     if (items.size === 1 && firstChild instanceof LGraphGroup) {
@@ -1555,6 +1611,8 @@ export class LGraph
 
     const subgraph = this.createSubgraph(data)
     subgraph.configure(data)
+    for (const node of subgraph.nodes) node.onGraphConfigured?.()
+    for (const node of subgraph.nodes) node.onAfterGraphConfigured?.()
 
     // Position the subgraph input nodes
     subgraph.inputNode.arrange()
@@ -1639,12 +1697,6 @@ export class LGraph
         } else {
           throw new TypeError('Subgraph input node is not a SubgraphInput')
         }
-        console.debug(
-          'Reconnect input links in parent graph',
-          { ...link },
-          this.links.get(link.id),
-          this.links.get(link.id) === link
-        )
 
         for (const resolved of others) {
           resolved.link.disconnect(this)
@@ -1660,7 +1712,7 @@ export class LGraph
         continue
       }
 
-      const input = subgraphNode.findInputSlotByType(link.type, true, true)
+      const input = subgraphNode.inputs[i - 1]
       outputNode.connectSlots(output, subgraphNode, input, link.parentId)
     }
 
@@ -1705,13 +1757,42 @@ export class LGraph
 
     subgraphNode._setConcreteSlots()
     subgraphNode.arrange()
+
+    this.canvasAction((c) =>
+      c.canvas.dispatchEvent(
+        new CustomEvent('subgraph-converted', {
+          bubbles: true,
+          detail: { subgraphNode: subgraphNode as SubgraphNode }
+        })
+      )
+    )
     return { subgraph, node: subgraphNode as SubgraphNode }
   }
 
-  unpackSubgraph(subgraphNode: SubgraphNode) {
+  unpackSubgraph(
+    subgraphNode: SubgraphNode,
+    options?: { skipMissingNodes?: boolean }
+  ) {
     if (!(subgraphNode instanceof SubgraphNode))
       throw new Error('Can only unpack Subgraph Nodes')
+
+    // Record state before unpacking for proper undo support
     this.beforeChange()
+
+    try {
+      this._unpackSubgraphImpl(subgraphNode, options)
+    } finally {
+      // Mark state change complete for proper undo support
+      this.afterChange()
+    }
+  }
+
+  private _unpackSubgraphImpl(
+    subgraphNode: SubgraphNode,
+    options?: { skipMissingNodes?: boolean }
+  ) {
+    const skipMissingNodes = options?.skipMissingNodes ?? false
+
     //NOTE: Create bounds can not be called on positionables directly as the subgraph is not being displayed and boundingRect is not initialized.
     //NOTE: NODE_TITLE_HEIGHT is explicitly excluded here
     const positionables = [
@@ -1732,9 +1813,21 @@ export class LGraph
     const movedNodes = multiClone(subgraphNode.subgraph.nodes)
     const nodeIdMap = new Map<NodeId, NodeId>()
     for (const n_info of movedNodes) {
-      const node = LiteGraph.createNode(String(n_info.type), n_info.title)
+      let node = LiteGraph.createNode(String(n_info.type), n_info.title)
       if (!node) {
-        throw new Error('Node not found')
+        if (skipMissingNodes) {
+          console.warn(
+            `Cannot unpack node of type "${n_info.type}" - node type not found. Creating placeholder node.`
+          )
+          node = new LGraphNode(n_info.title || n_info.type || 'Missing Node')
+          node.last_serialization = n_info
+          node.has_errors = true
+          node.type = String(n_info.type)
+        } else {
+          throw new Error(
+            `Cannot unpack: node type "${n_info.type}" is not registered`
+          )
+        }
       }
 
       nodeIdMap.set(n_info.id, ++this.last_node_id)
@@ -1987,7 +2080,6 @@ export class LGraph
     }
 
     this.canvasAction((c) => c.selectItems(toSelect))
-    this.afterChange()
   }
 
   /**
@@ -2263,7 +2355,7 @@ export class LGraph
           let node = LiteGraph.createNode(String(n_info.type), n_info.title)
           if (!node) {
             if (LiteGraph.debug)
-              console.log('Node not found or has errors:', n_info.type)
+              console.warn('Node not found or has errors:', n_info.type)
 
             // in case of error we create a replacement node to avoid losing info
             node = new LGraphNode('')

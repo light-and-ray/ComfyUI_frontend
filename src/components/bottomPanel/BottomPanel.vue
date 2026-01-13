@@ -1,19 +1,44 @@
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex h-full flex-col">
     <Tabs
       :key="$i18n.locale"
       v-model:value="bottomPanelStore.activeBottomPanelTabId"
+      style="--p-tabs-tablist-background: var(--comfy-menu-bg)"
     >
-      <TabList pt:tab-list="border-none">
-        <div class="w-full flex justify-between">
-          <div class="tabs-container">
+      <TabList
+        pt:tab-list="border-none h-full flex items-center py-2 border-b-1 border-solid"
+        class="bg-transparent"
+      >
+        <div class="flex w-full justify-between">
+          <div class="tabs-container font-inter">
             <Tab
               v-for="tab in bottomPanelStore.bottomPanelTabs"
               :key="tab.id"
               :value="tab.id"
-              class="p-3 border-none"
+              class="m-1 mx-2 border-none font-inter"
+              :class="{
+                'tab-list-single-item':
+                  bottomPanelStore.bottomPanelTabs.length === 1
+              }"
+              :pt:root="
+                (x: TabPassThroughMethodOptions) => ({
+                  class: {
+                    'p-3 rounded-lg': true,
+                    'pointer-events-none':
+                      bottomPanelStore.bottomPanelTabs.length === 1
+                  },
+                  style: {
+                    color: 'var(--fg-color)',
+                    backgroundColor:
+                      !x.context.active ||
+                      bottomPanelStore.bottomPanelTabs.length === 1
+                        ? ''
+                        : 'var(--bg-color)'
+                  }
+                })
+              "
             >
-              <span class="font-bold">
+              <span class="font-normal">
                 {{ getTabDisplayTitle(tab) }}
               </span>
             </Tab>
@@ -21,27 +46,28 @@
           <div class="flex items-center gap-2">
             <Button
               v-if="isShortcutsTabActive"
-              :label="$t('shortcuts.manageShortcuts')"
-              icon="pi pi-cog"
-              severity="secondary"
-              size="small"
-              text
+              variant="muted-textonly"
+              size="sm"
               @click="openKeybindingSettings"
-            />
+            >
+              <i class="pi pi-cog" />
+              {{ $t('shortcuts.manageShortcuts') }}
+            </Button>
             <Button
               class="justify-self-end"
-              icon="pi pi-times"
-              severity="secondary"
-              size="small"
-              text
+              variant="muted-textonly"
+              size="sm"
+              :aria-label="t('g.close')"
               @click="closeBottomPanel"
-            />
+            >
+              <i class="pi pi-times" />
+            </Button>
           </div>
         </div>
       </TabList>
     </Tabs>
     <!-- h-0 to force the div to grow -->
-    <div class="grow h-0">
+    <div class="h-0 grow">
       <ExtensionSlot
         v-if="
           bottomPanelStore.bottomPanelVisible &&
@@ -54,14 +80,15 @@
 </template>
 
 <script setup lang="ts">
-import Button from 'primevue/button'
 import Tab from 'primevue/tab'
+import type { TabPassThroughMethodOptions } from 'primevue/tab'
 import TabList from 'primevue/tablist'
 import Tabs from 'primevue/tabs'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ExtensionSlot from '@/components/common/ExtensionSlot.vue'
+import Button from '@/components/ui/button/Button.vue'
 import { useDialogService } from '@/services/dialogService'
 import { useBottomPanelStore } from '@/stores/workspace/bottomPanelStore'
 import type { BottomPanelExtension } from '@/types/extensionTypes'
@@ -95,3 +122,9 @@ const closeBottomPanel = () => {
   bottomPanelStore.activePanel = null
 }
 </script>
+
+<style scoped>
+:deep(.p-tablist-active-bar) {
+  display: none;
+}
+</style>

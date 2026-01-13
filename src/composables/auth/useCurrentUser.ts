@@ -1,3 +1,4 @@
+import { whenever } from '@vueuse/core'
 import { computed, watch } from 'vue'
 
 import { useFirebaseAuthActions } from '@/composables/auth/useFirebaseAuthActions'
@@ -33,18 +34,16 @@ export const useCurrentUser = () => {
     return null
   })
 
-  const onUserResolved = (callback: (user: AuthUserInfo) => void) => {
-    if (resolvedUserInfo.value) {
-      callback(resolvedUserInfo.value)
-    }
+  const onUserResolved = (callback: (user: AuthUserInfo) => void) =>
+    whenever(resolvedUserInfo, callback, { immediate: true })
 
-    const stop = watch(resolvedUserInfo, (value) => {
-      if (value) {
-        callback(value)
-      }
+  const onTokenRefreshed = (callback: () => void) =>
+    whenever(() => authStore.tokenRefreshTrigger, callback)
+
+  const onUserLogout = (callback: () => void) => {
+    watch(resolvedUserInfo, (user) => {
+      if (!user) callback()
     })
-
-    return () => stop()
   }
 
   const userDisplayName = computed(() => {
@@ -143,6 +142,8 @@ export const useCurrentUser = () => {
     handleSignOut,
     handleSignIn,
     handleDeleteAccount,
-    onUserResolved
+    onUserResolved,
+    onTokenRefreshed,
+    onUserLogout
   }
 }

@@ -10,6 +10,7 @@ import type { ComputedRef, Ref } from 'vue'
 export enum LayoutSource {
   Canvas = 'canvas',
   Vue = 'vue',
+  DOM = 'dom',
   External = 'external'
 }
 
@@ -122,7 +123,7 @@ type OperationType =
   | 'createNode'
   | 'deleteNode'
   | 'setNodeVisibility'
-  | 'batchUpdate'
+  | 'batchUpdateBounds'
   | 'createLink'
   | 'deleteLink'
   | 'createReroute'
@@ -184,10 +185,11 @@ interface SetNodeVisibilityOperation extends NodeOpBase {
 /**
  * Batch update operation for atomic multi-property changes
  */
-interface BatchUpdateOperation extends NodeOpBase {
-  type: 'batchUpdate'
-  updates: Partial<NodeLayout>
-  previousValues: Partial<NodeLayout>
+export interface BatchUpdateBoundsOperation extends OperationMeta {
+  entity: 'node'
+  type: 'batchUpdateBounds'
+  nodeIds: NodeId[]
+  bounds: Record<NodeId, { bounds: Bounds; previousBounds: Bounds }>
 }
 
 /**
@@ -244,7 +246,7 @@ export type LayoutOperation =
   | CreateNodeOperation
   | DeleteNodeOperation
   | SetNodeVisibilityOperation
-  | BatchUpdateOperation
+  | BatchUpdateBoundsOperation
   | CreateLinkOperation
   | DeleteLinkOperation
   | CreateRerouteOperation
@@ -308,6 +310,9 @@ export interface LayoutStore {
   getLinkLayout(linkId: LinkId): LinkLayout | null
   getSlotLayout(key: string): SlotLayout | null
   getRerouteLayout(rerouteId: RerouteId): RerouteLayout | null
+
+  // Returns all slot layout keys currently tracked by the store
+  getAllSlotKeys(): string[]
 
   // Direct mutation API (CRDT-ready)
   applyOperation(operation: LayoutOperation): void

@@ -1,6 +1,7 @@
 import { useEventListener, whenever } from '@vueuse/core'
 import { defineStore } from 'pinia'
-import { type Raw, computed, markRaw, ref, shallowRef } from 'vue'
+import { computed, markRaw, ref, shallowRef } from 'vue'
+import type { Raw } from 'vue'
 
 import type { Point, Positionable } from '@/lib/litegraph/src/interfaces'
 import type {
@@ -38,6 +39,8 @@ export const useCanvasStore = defineStore('canvas', () => {
 
   // Reactive scale percentage that syncs with app.canvas.ds.scale
   const appScalePercentage = ref(100)
+
+  const linearMode = ref(false)
 
   // Set up scale synchronization when canvas is available
   let originalOnChanged: ((scale: number, offset: Point) => void) | undefined =
@@ -99,6 +102,16 @@ export const useCanvasStore = defineStore('canvas', () => {
   const currentGraph = shallowRef<LGraph | null>(null)
   const isInSubgraph = ref(false)
 
+  // Provide selection state to all Vue nodes
+  const selectedNodeIds = computed(
+    () =>
+      new Set(
+        selectedItems.value
+          .filter((item) => item.id !== undefined)
+          .map((item) => String(item.id))
+      )
+  )
+
   whenever(
     () => canvas.value,
     (newCanvas) => {
@@ -106,7 +119,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         newCanvas.canvas,
         'litegraph:set-graph',
         (event: CustomEvent<{ newGraph: LGraph; oldGraph: LGraph }>) => {
-          const newGraph = event.detail?.newGraph || app.canvas?.graph
+          const newGraph = event.detail?.newGraph ?? app.canvas?.graph // TODO: Ambiguous Graph
           currentGraph.value = newGraph
           isInSubgraph.value = Boolean(app.canvas?.subgraph)
         }
@@ -122,10 +135,12 @@ export const useCanvasStore = defineStore('canvas', () => {
   return {
     canvas,
     selectedItems,
+    selectedNodeIds,
     nodeSelected,
     groupSelected,
     rerouteSelected,
     appScalePercentage,
+    linearMode,
     updateSelectedItems,
     getCanvas,
     setAppZoomFromPercentage,

@@ -151,7 +151,8 @@ class NodeSlotReference {
         const convertedPos =
           window['app'].canvas.ds.convertOffsetToCanvas(rawPos)
 
-        // Debug logging - convert Float32Arrays to regular arrays for visibility
+        // Debug logging - convert Float64Arrays to regular arrays for visibility
+        // eslint-disable-next-line no-console
         console.log(
           `NodeSlotReference debug for ${type} slot ${index} on node ${id}:`,
           {
@@ -461,7 +462,6 @@ export class NodeReference {
   async convertToSubgraph() {
     await this.clickContextMenuOption('Convert to Subgraph')
     await this.comfyPage.nextFrame()
-    await this.comfyPage.page.waitForTimeout(256)
     const nodes = await this.comfyPage.getNodeRefsByTitle('New Subgraph')
     if (nodes.length !== 1) {
       throw new Error(
@@ -502,7 +502,7 @@ export class NodeReference {
       for (const position of clickPositions) {
         // Clear any selection first
         await this.comfyPage.canvas.click({
-          position: { x: 50, y: 50 },
+          position: { x: 250, y: 250 },
           force: true
         })
         await this.comfyPage.nextFrame()
@@ -510,7 +510,6 @@ export class NodeReference {
         // Double-click to enter subgraph
         await this.comfyPage.canvas.dblclick({ position, force: true })
         await this.comfyPage.nextFrame()
-        await this.comfyPage.page.waitForTimeout(500)
 
         // Check if we successfully entered the subgraph
         isInSubgraph = await this.comfyPage.page.evaluate(() => {

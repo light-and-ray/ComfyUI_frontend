@@ -11,7 +11,10 @@ import type {
   IStringWidget
 } from '@/lib/litegraph/src/types/widgets'
 import { useToastStore } from '@/platform/updates/common/toastStore'
-import type { ResultItemType } from '@/schemas/apiSchema'
+import {
+  getResourceURL,
+  splitFilePath
+} from '@/renderer/extensions/vueNodes/widgets/utils/audioUtils'
 import type { ComfyNodeDef } from '@/schemas/nodeDefSchema'
 import type { DOMWidget } from '@/scripts/domWidget'
 import { useAudioService } from '@/services/audioService'
@@ -20,32 +23,6 @@ import { getNodeByLocatorId } from '@/utils/graphTraversalUtil'
 
 import { api } from '../../scripts/api'
 import { app } from '../../scripts/app'
-
-function splitFilePath(path: string): [string, string] {
-  const folder_separator = path.lastIndexOf('/')
-  if (folder_separator === -1) {
-    return ['', path]
-  }
-  return [
-    path.substring(0, folder_separator),
-    path.substring(folder_separator + 1)
-  ]
-}
-
-function getResourceURL(
-  subfolder: string,
-  filename: string,
-  type: ResultItemType = 'input'
-): string {
-  const params = [
-    'filename=' + encodeURIComponent(filename),
-    'type=' + type,
-    'subfolder=' + subfolder,
-    app.getRandParam().substring(1)
-  ].join('&')
-
-  return `/view?${params}`
-}
 
 async function uploadFile(
   audioWidget: IStringWidget,
@@ -81,6 +58,9 @@ async function uploadFile(
           getResourceURL(...splitFilePath(path))
         )
         audioWidget.value = path
+
+        // Manually trigger the callback to update VueNodes
+        audioWidget.callback?.(path)
       }
     } else {
       useToastStore().addAlert(resp.status + ' - ' + resp.statusText)
@@ -123,7 +103,6 @@ app.registerExtension({
         const audioUIWidget: DOMWidget<HTMLAudioElement, string> =
           node.addDOMWidget(inputName, /* name=*/ 'audioUI', audio)
         audioUIWidget.serialize = false
-
         const { nodeData } = node.constructor
         if (nodeData == null) throw new TypeError('nodeData is null')
 
@@ -163,7 +142,7 @@ app.registerExtension({
   onNodeOutputsUpdated(nodeOutputs: Record<NodeLocatorId, any>) {
     for (const [nodeLocatorId, output] of Object.entries(nodeOutputs)) {
       if ('audio' in output) {
-        const node = getNodeByLocatorId(app.graph, nodeLocatorId)
+        const node = getNodeByLocatorId(app.rootGraph, nodeLocatorId)
         if (!node) continue
 
         // @ts-expect-error fixme ts strict error
@@ -199,10 +178,12 @@ app.registerExtension({
         const audioUIWidget = node.widgets.find(
           (w) => w.name === 'audioUI'
         ) as unknown as DOMWidget<HTMLAudioElement, string>
+        audioUIWidget.options.canvasOnly = true
 
         const onAudioWidgetUpdate = () => {
+          if (typeof audioWidget.value !== 'string') return
           audioUIWidget.element.src = api.apiURL(
-            getResourceURL(...splitFilePath(audioWidget.value as string))
+            getResourceURL(...splitFilePath(audioWidget.value))
           )
         }
         // Initially load default audio file to audioUIWidget.
@@ -241,7 +222,7 @@ app.registerExtension({
           inputName,
           '',
           openFileSelection,
-          { serialize: false }
+          { serialize: false, canvasOnly: true }
         )
         uploadWidget.label = t('g.choose_file_to_upload')
 
@@ -273,9 +254,9 @@ app.registerExtension({
         audio.controls = true
         audio.classList.add('comfy-audio')
         audio.setAttribute('name', 'media')
-
         const audioUIWidget: DOMWidget<HTMLAudioElement, string> =
           node.addDOMWidget(inputName, /* name=*/ 'audioUI', audio)
+        audioUIWidget.options.canvasOnly = false
 
         let mediaRecorder: MediaRecorder | null = null
         let isRecording = false
@@ -398,10 +379,12 @@ app.registerExtension({
               mediaRecorder.stop()
             }
           },
-          { serialize: false }
+          { serialize: false, canvasOnly: false }
         )
 
         recordWidget.label = t('g.startRecording')
+        // Override the type for Vue rendering while keeping 'button' for LiteGraph
+        recordWidget.type = 'audiorecord'
 
         const originalOnRemoved = node.onRemoved
         node.onRemoved = function () {

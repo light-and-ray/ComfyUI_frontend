@@ -3,6 +3,8 @@
  */
 import type { Locator, Page } from '@playwright/test'
 
+import { VueNodeFixture } from './utils/vueNodeFixtures'
+
 export class VueNodeHelpers {
   constructor(private page: Page) {}
 
@@ -14,12 +16,24 @@ export class VueNodeHelpers {
   }
 
   /**
+   * Get locator for a Vue node by its NodeId
+   */
+  getNodeLocator(nodeId: string): Locator {
+    return this.page.locator(`[data-node-id="${nodeId}"]`)
+  }
+
+  /**
    * Get locator for selected Vue node components (using visual selection indicators)
    */
   get selectedNodes(): Locator {
-    return this.page.locator(
-      '[data-node-id].outline-black, [data-node-id].outline-white'
-    )
+    return this.page.locator('[data-node-id].outline-node-component-outline')
+  }
+
+  /**
+   * Get locator for a Vue node by the node's title (displayed name in the header)
+   */
+  getNodeByTitle(title: string): Locator {
+    return this.page.locator(`[data-node-id]`).filter({ hasText: title })
   }
 
   /**
@@ -51,7 +65,9 @@ export class VueNodeHelpers {
    * Select a specific Vue node by ID
    */
   async selectNode(nodeId: string): Promise<void> {
-    await this.page.locator(`[data-node-id="${nodeId}"]`).click()
+    await this.page
+      .locator(`[data-node-id="${nodeId}"] .lg-node-header`)
+      .click()
   }
 
   /**
@@ -63,11 +79,13 @@ export class VueNodeHelpers {
     // Select first node normally
     await this.selectNode(nodeIds[0])
 
-    // Add additional nodes with Ctrl+click
+    // Add additional nodes with Ctrl+click on header
     for (let i = 1; i < nodeIds.length; i++) {
-      await this.page.locator(`[data-node-id="${nodeIds[i]}"]`).click({
-        modifiers: ['Control']
-      })
+      await this.page
+        .locator(`[data-node-id="${nodeIds[i]}"] .lg-node-header`)
+        .click({
+          modifiers: ['Control']
+        })
     }
   }
 
@@ -95,6 +113,24 @@ export class VueNodeHelpers {
   }
 
   /**
+   * Return a DOM-focused VueNodeFixture for the first node matching the title.
+   * Resolves the node id up front so subsequent interactions survive title changes.
+   */
+  async getFixtureByTitle(title: string): Promise<VueNodeFixture> {
+    const node = this.getNodeByTitle(title).first()
+    await node.waitFor({ state: 'visible' })
+
+    const nodeId = await node.evaluate((el) => el.getAttribute('data-node-id'))
+    if (!nodeId) {
+      throw new Error(
+        `Vue node titled "${title}" is missing its data-node-id attribute`
+      )
+    }
+
+    return new VueNodeFixture(this.getNodeLocator(nodeId))
+  }
+
+  /**
    * Wait for Vue nodes to be rendered
    */
   async waitForNodes(expectedCount?: number): Promise<void> {
@@ -105,6 +141,26 @@ export class VueNodeHelpers {
       )
     } else {
       await this.page.waitForSelector('[data-node-id]')
+    }
+  }
+
+  /**
+   * Get a specific widget by node title and widget name
+   */
+  getWidgetByName(nodeTitle: string, widgetName: string): Locator {
+    return this.getNodeByTitle(nodeTitle).locator(
+      `_vue=[widget.name="${widgetName}"]`
+    )
+  }
+
+  /**
+   * Get controls for input number widgets (increment/decrement buttons and input)
+   */
+  getInputNumberControls(widget: Locator) {
+    return {
+      input: widget.locator('input'),
+      decrementButton: widget.getByTestId('decrement'),
+      incrementButton: widget.getByTestId('increment')
     }
   }
 }

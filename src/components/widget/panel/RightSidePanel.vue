@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full h-full pl-4 pr-6 pb-8 bg-white dark-theme:bg-zinc-800">
+  <div class="size-full bg-modal-panel-background pr-6 pb-8 pl-4">
     <slot></slot>
   </div>
 </template>

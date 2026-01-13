@@ -1,9 +1,12 @@
 <template>
   <div class="flex flex-col gap-1">
-    <div
-      class="p-4 border border-gray-300 dark-theme:border-gray-600 rounded max-h-[48rem]"
-    >
-      <Chart :type="chartType" :data="chartData" :options="chartOptions" />
+    <div class="max-h-[48rem] rounded border p-4">
+      <Chart
+        :type="chartType"
+        :data="chartData"
+        :options="chartOptions"
+        :aria-label="`${widget.name || $t('g.chart')} - ${chartType} ${$t('g.chartLowercase')}`"
+      />
     </div>
   </div>
 </template>
@@ -22,7 +25,6 @@ const value = defineModel<ChartData>({ required: true })
 
 const props = defineProps<{
   widget: SimplifiedWidget<ChartData, ChartWidgetOptions>
-  readonly?: boolean
 }>()
 
 const chartType = computed(() => props.widget.options?.type ?? 'line')

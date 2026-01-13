@@ -1,20 +1,52 @@
 <template>
   <div class="relative inline-flex items-center">
-    <IconButton @click="toggle">
-      <i-lucide:more-vertical class="text-sm" />
-    </IconButton>
+    <Button size="icon" variant="secondary" @click="popover?.toggle">
+      <i
+        :class="
+          cn(
+            !isVertical
+              ? 'icon-[lucide--ellipsis]'
+              : 'icon-[lucide--more-vertical]',
+            'text-sm'
+          )
+        "
+      />
+    </Button>
 
     <Popover
       ref="popover"
-      :append-to="'body'"
-      :auto-z-index="true"
-      :base-z-index="1000"
-      :dismissable="true"
-      :close-on-escape="true"
+      append-to="body"
+      auto-z-index
+      dismissable
+      close-on-escape
       unstyled
-      :pt="pt"
+      :base-z-index="1000"
+      :pt="{
+        root: {
+          class: cn('absolute z-50')
+        },
+        content: {
+          class: cn(
+            'mt-1 rounded-lg',
+            'bg-secondary-background text-base-foreground',
+            'shadow-lg'
+          )
+        }
+      }"
+      @show="
+        () => {
+          isOpen = true
+          $emit('menuOpened')
+        }
+      "
+      @hide="
+        () => {
+          isOpen = false
+          $emit('menuClosed')
+        }
+      "
     >
-      <div class="flex flex-col gap-2 p-2 min-w-40">
+      <div class="flex min-w-40 flex-col gap-2 p-2">
         <slot :close="hide" />
       </div>
     </Popover>
@@ -23,34 +55,31 @@
 
 <script setup lang="ts">
 import Popover from 'primevue/popover'
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 
+import Button from '@/components/ui/button/Button.vue'
 import { cn } from '@/utils/tailwindUtil'
 
-import IconButton from './IconButton.vue'
-
-const popover = ref<InstanceType<typeof Popover>>()
-
-const toggle = (event: Event) => {
-  popover.value?.toggle(event)
+interface MoreButtonProps {
+  isVertical?: boolean
 }
 
-const hide = () => {
+const { isVertical = false } = defineProps<MoreButtonProps>()
+
+defineEmits<{
+  menuOpened: []
+  menuClosed: []
+}>()
+
+const isOpen = ref(false)
+const popover = ref<InstanceType<typeof Popover>>()
+
+function hide() {
   popover.value?.hide()
 }
 
-const pt = computed(() => ({
-  root: {
-    class: cn('absolute z-50')
-  },
-  content: {
-    class: cn(
-      'mt-2 rounded-lg',
-      'bg-white dark-theme:bg-zinc-800',
-      'text-neutral dark-theme:text-white',
-      'shadow-lg',
-      'border border-zinc-200 dark-theme:border-zinc-700'
-    )
-  }
-}))
+defineExpose({
+  hide,
+  isOpen
+})
 </script>

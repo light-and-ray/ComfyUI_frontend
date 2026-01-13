@@ -1,18 +1,15 @@
 <template>
   <Form
-    class="flex flex-col gap-6 w-96"
+    class="flex w-96 flex-col gap-6"
     :resolver="zodResolver(updatePasswordSchema)"
     @submit="onSubmit"
   >
     <PasswordFields />
 
     <!-- Submit Button -->
-    <Button
-      type="submit"
-      :label="$t('userSettings.updatePassword')"
-      class="h-10 font-medium mt-4"
-      :loading="loading"
-    />
+    <Button type="submit" class="mt-4 h-10 font-medium" :loading="loading">
+      {{ $t('userSettings.updatePassword') }}
+    </Button>
   </Form>
 </template>
 
@@ -20,10 +17,10 @@
 import type { FormSubmitEvent } from '@primevue/forms'
 import { Form } from '@primevue/forms'
 import { zodResolver } from '@primevue/forms/resolvers/zod'
-import Button from 'primevue/button'
 import { ref } from 'vue'
 
 import PasswordFields from '@/components/dialog/content/signin/PasswordFields.vue'
+import Button from '@/components/ui/button/Button.vue'
 import { useFirebaseAuthActions } from '@/composables/auth/useFirebaseAuthActions'
 import { updatePasswordSchema } from '@/schemas/signInSchema'
 

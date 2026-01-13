@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 
 import AssetBrowserModal from '@/platform/assets/components/AssetBrowserModal.vue'
+import type { AssetDisplayItem } from '@/platform/assets/composables/useAssetBrowser'
 import {
   createMockAssets,
   mockAssets
@@ -51,17 +52,15 @@ export const Default: Story = {
     nodeType: 'CheckpointLoaderSimple',
     inputName: 'ckpt_name',
     currentValue: '',
-    showLeftPanel: false
+    showLeftPanel: true
   },
   render: (args) => ({
     components: { AssetBrowserModal },
     setup() {
-      const onAssetSelect = (asset: any) => {
-        console.log('Selected asset:', asset)
+      const onAssetSelect = (_asset: AssetDisplayItem) => {
+        // Asset selection handler for story
       }
-      const onClose = () => {
-        console.log('Modal closed')
-      }
+      const onClose = () => {}
 
       return {
         ...args,
@@ -71,7 +70,7 @@ export const Default: Story = {
       }
     },
     template: `
-      <div class="flex items-center justify-center min-h-screen bg-stone-200 dark-theme:bg-stone-200 p-4">
+      <div class="flex items-center justify-center min-h-screen bg-ash-800 p-4">
         <AssetBrowserModal
           :node-type="nodeType"
           :input-name="inputName"
@@ -96,11 +95,11 @@ export const SingleAssetType: Story = {
   render: (args) => ({
     components: { AssetBrowserModal },
     setup() {
-      const onAssetSelect = (asset: any) => {
-        console.log('Selected asset:', asset)
+      const onAssetSelect = (_asset: AssetDisplayItem) => {
+        // Asset selection handler for story
       }
       const onClose = () => {
-        console.log('Modal closed')
+        // Modal close handler for story
       }
 
       // Create assets with only one type (checkpoints)
@@ -112,7 +111,7 @@ export const SingleAssetType: Story = {
       return { ...args, onAssetSelect, onClose, assets: singleTypeAssets }
     },
     template: `
-      <div class="flex items-center justify-center min-h-screen bg-stone-200 dark-theme:bg-stone-200 p-4">
+      <div class="flex items-center justify-center min-h-screen bg-ash-800 p-4">
         <AssetBrowserModal
           :node-type="nodeType"
           :input-name="inputName"
@@ -145,17 +144,17 @@ export const NoLeftPanel: Story = {
   render: (args) => ({
     components: { AssetBrowserModal },
     setup() {
-      const onAssetSelect = (asset: any) => {
-        console.log('Selected asset:', asset)
+      const onAssetSelect = (_asset: AssetDisplayItem) => {
+        // Asset selection handler for story
       }
       const onClose = () => {
-        console.log('Modal closed')
+        // Modal close handler for story
       }
 
       return { ...args, onAssetSelect, onClose, assets: mockAssets }
     },
     template: `
-      <div class="flex items-center justify-center min-h-screen bg-stone-200 dark-theme:bg-stone-200 p-4">
+      <div class="flex items-center justify-center min-h-screen bg-ash-800 p-4">
         <AssetBrowserModal
           :node-type="nodeType"
           :input-name="inputName"

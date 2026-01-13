@@ -1,40 +1,38 @@
 <template>
-  <IconTextButton
-    v-bind="$attrs"
-    type="transparent"
-    :label="computedLabel"
-    :border="true"
-    :size="size"
+  <Button
+    variant="secondary"
+    :size
     :disabled="isLoading || isInstalling"
     @click="installAllPacks"
   >
-    <template #icon>
-      <i
-        v-if="hasConflict && !isInstalling && !isLoading"
-        class="pi pi-exclamation-triangle text-yellow-500"
-      />
-      <DotSpinner
-        v-else-if="isLoading || isInstalling"
-        duration="1s"
-        :size="size === 'sm' ? 12 : 16"
-      />
-    </template>
-  </IconTextButton>
+    <i
+      v-if="hasConflict && !isInstalling && !isLoading"
+      class="icon-[lucide--triangle-alert] text-warning-background"
+    />
+    <DotSpinner
+      v-else-if="isLoading || isInstalling"
+      duration="1s"
+      :size="size === 'sm' ? 12 : 16"
+    />
+    <span>{{ computedLabel }}</span>
+  </Button>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import IconTextButton from '@/components/button/IconTextButton.vue'
 import DotSpinner from '@/components/common/DotSpinner.vue'
-import { useConflictDetection } from '@/composables/useConflictDetection'
-import { t } from '@/i18n'
+import Button from '@/components/ui/button/Button.vue'
+import type { ButtonVariants } from '@/components/ui/button/button.variants'
 import { useDialogService } from '@/services/dialogService'
-import type { ButtonSize } from '@/types/buttonTypes'
 import type { components } from '@/types/comfyRegistryTypes'
-import type { ConflictDetectionResult } from '@/types/conflictDetectionTypes'
-import type { ConflictDetail } from '@/types/conflictDetectionTypes'
+import { useConflictDetection } from '@/workbench/extensions/manager/composables/useConflictDetection'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
+import type {
+  ConflictDetail,
+  ConflictDetectionResult
+} from '@/workbench/extensions/manager/types/conflictDetectionTypes'
 import type { components as ManagerComponents } from '@/workbench/extensions/manager/types/generatedManagerTypes'
 
 type NodePack = components['schemas']['Node']
@@ -50,13 +48,14 @@ const {
   nodePacks: NodePack[]
   isLoading?: boolean
   label?: string
-  size?: ButtonSize
+  size?: ButtonVariants['size']
   hasConflict?: boolean
   conflictInfo?: ConflictDetail[]
 }>()
 
 const managerStore = useComfyManagerStore()
 const { showNodeConflictDialog } = useDialogService()
+const { t } = useI18n()
 
 // Check if any of the packs are currently being installed
 const isInstalling = computed(() => {
@@ -72,8 +71,8 @@ const createPayload = (installItem: NodePack) => {
   const isUnclaimedPack = installItem.publisher?.name === 'Unclaimed'
   const versionToInstall = isUnclaimedPack
     ? ('nightly' as ManagerComponents['schemas']['SelectedVersion'])
-    : installItem.latest_version?.version ??
-      ('latest' as ManagerComponents['schemas']['SelectedVersion'])
+    : (installItem.latest_version?.version ??
+      ('latest' as ManagerComponents['schemas']['SelectedVersion']))
 
   return {
     id: installItem.id,
@@ -138,7 +137,7 @@ const performInstallation = async (packs: NodePack[]) => {
 const computedLabel = computed(() =>
   isInstalling.value
     ? t('g.installing')
-    : label ??
-      (nodePacks.length > 1 ? t('manager.installSelected') : t('g.install'))
+    : (label ??
+      (nodePacks.length > 1 ? t('manager.installSelected') : t('g.install')))
 )
 </script>

@@ -4,7 +4,7 @@
       <PackIcon :node-pack="nodePacks[0]" width="204" height="106" />
     </slot>
     <h2
-      class="text-2xl font-bold text-center mt-4 mb-2"
+      class="mt-4 mb-2 text-center text-2xl font-bold"
       style="word-break: break-all"
     >
       <slot name="title">
@@ -13,7 +13,7 @@
     </h2>
     <div
       v-if="!importFailed"
-      class="mt-2 mb-4 w-full max-w-xs flex justify-center"
+      class="mt-2 mb-4 flex w-full max-w-xs justify-center"
     >
       <slot name="install-button">
         <PackUninstallButton
@@ -45,14 +45,14 @@
 import { computed, inject, ref, watch } from 'vue'
 
 import NoResultsPlaceholder from '@/components/common/NoResultsPlaceholder.vue'
-import { useConflictDetection } from '@/composables/useConflictDetection'
 import type { components } from '@/types/comfyRegistryTypes'
-import type { ConflictDetail } from '@/types/conflictDetectionTypes'
-import { ImportFailedKey } from '@/types/importFailedTypes'
 import PackInstallButton from '@/workbench/extensions/manager/components/manager/button/PackInstallButton.vue'
 import PackUninstallButton from '@/workbench/extensions/manager/components/manager/button/PackUninstallButton.vue'
 import PackIcon from '@/workbench/extensions/manager/components/manager/packIcon/PackIcon.vue'
+import { useConflictDetection } from '@/workbench/extensions/manager/composables/useConflictDetection'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
+import type { ConflictDetail } from '@/workbench/extensions/manager/types/conflictDetectionTypes'
+import { ImportFailedKey } from '@/workbench/extensions/manager/types/importFailedTypes'
 
 const { nodePacks, hasConflict } = defineProps<{
   nodePacks: components['schemas']['Node'][]

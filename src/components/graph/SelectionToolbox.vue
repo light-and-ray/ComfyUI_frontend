@@ -2,18 +2,17 @@
   <div
     ref="toolboxRef"
     style="transform: translate(var(--tb-x), var(--tb-y))"
-    class="fixed left-0 top-0 z-40 pointer-events-none"
+    class="pointer-events-none fixed top-0 left-0 z-40"
   >
     <Transition name="slide-up">
       <Panel
         v-if="visible"
-        class="rounded-lg selection-toolbox pointer-events-auto"
-        :style="`backgroundColor: ${containerStyles.backgroundColor};`"
+        class="selection-toolbox pointer-events-auto rounded-lg border border-interface-stroke bg-interface-panel-surface"
         :pt="{
           header: 'hidden',
-          content: 'px-1 py-1 h-10 px-1 flex flex-row gap-1'
+          content: 'p-2 h-12 flex flex-row gap-1'
         }"
-        @wheel="canvasInteractions.handleWheel"
+        @wheel="canvasInteractions.forwardEventToCanvas"
       >
         <DeleteButton v-if="showDelete" />
         <VerticalDivider v-if="showInfoButton && showAnyPrimaryActions" />
@@ -22,7 +21,8 @@
         <ColorPickerButton v-if="showColorPicker" />
         <FrameNodes v-if="showFrameNodes" />
         <ConvertToSubgraphButton v-if="showConvertToSubgraph" />
-        <PublishSubgraphButton v-if="showPublishSubgraph" />
+        <ConfigureSubgraph v-if="showSubgraphButtons" />
+        <PublishSubgraphButton v-if="showSubgraphButtons" />
         <MaskEditorButton v-if="showMaskEditor" />
         <VerticalDivider
           v-if="showAnyPrimaryActions && showAnyControlActions"
@@ -38,10 +38,11 @@
           :command="command"
         />
         <ExecuteButton v-if="showExecute" />
-        <MoreOptions />
+        <NodeOptionsButton />
       </Panel>
     </Transition>
   </div>
+  <NodeContextMenu />
 </template>
 
 <script setup lang="ts">
@@ -50,6 +51,7 @@ import { computed, ref } from 'vue'
 
 import BypassButton from '@/components/graph/selectionToolbox/BypassButton.vue'
 import ColorPickerButton from '@/components/graph/selectionToolbox/ColorPickerButton.vue'
+import ConfigureSubgraph from '@/components/graph/selectionToolbox/ConfigureSubgraph.vue'
 import ConvertToSubgraphButton from '@/components/graph/selectionToolbox/ConvertToSubgraphButton.vue'
 import DeleteButton from '@/components/graph/selectionToolbox/DeleteButton.vue'
 import ExecuteButton from '@/components/graph/selectionToolbox/ExecuteButton.vue'
@@ -63,20 +65,19 @@ import { useSelectionToolboxPosition } from '@/composables/canvas/useSelectionTo
 import { useSelectionState } from '@/composables/graph/useSelectionState'
 import { useCanvasStore } from '@/renderer/core/canvas/canvasStore'
 import { useCanvasInteractions } from '@/renderer/core/canvas/useCanvasInteractions'
-import { useMinimap } from '@/renderer/extensions/minimap/composables/useMinimap'
 import { useExtensionService } from '@/services/extensionService'
-import { type ComfyCommandImpl, useCommandStore } from '@/stores/commandStore'
+import { useCommandStore } from '@/stores/commandStore'
+import type { ComfyCommandImpl } from '@/stores/commandStore'
 
+import NodeContextMenu from './NodeContextMenu.vue'
 import FrameNodes from './selectionToolbox/FrameNodes.vue'
-import MoreOptions from './selectionToolbox/MoreOptions.vue'
+import NodeOptionsButton from './selectionToolbox/NodeOptionsButton.vue'
 import VerticalDivider from './selectionToolbox/VerticalDivider.vue'
 
 const commandStore = useCommandStore()
 const canvasStore = useCanvasStore()
 const extensionService = useExtensionService()
 const canvasInteractions = useCanvasInteractions()
-const minimap = useMinimap()
-const containerStyles = minimap.containerStyles
 
 const toolboxRef = ref<HTMLElement | undefined>()
 const { visible } = useSelectionToolboxPosition(toolboxRef)
@@ -112,7 +113,7 @@ const showInfoButton = computed(() => !!nodeDef.value)
 const showColorPicker = computed(() => hasAnySelection.value)
 const showConvertToSubgraph = computed(() => hasAnySelection.value)
 const showFrameNodes = computed(() => hasMultipleSelection.value)
-const showPublishSubgraph = computed(() => isSingleSubgraph.value)
+const showSubgraphButtons = computed(() => isSingleSubgraph.value)
 
 const showBypass = computed(
   () =>
@@ -130,7 +131,7 @@ const showAnyPrimaryActions = computed(
     showColorPicker.value ||
     showConvertToSubgraph.value ||
     showFrameNodes.value ||
-    showPublishSubgraph.value
+    showSubgraphButtons.value
 )
 
 const showAnyControlActions = computed(() => showBypass.value)

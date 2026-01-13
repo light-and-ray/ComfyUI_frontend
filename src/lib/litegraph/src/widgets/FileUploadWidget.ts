@@ -1,9 +1,8 @@
+import { t } from '@/i18n'
+
 import type { IFileUploadWidget } from '../types/widgets'
-import {
-  BaseWidget,
-  type DrawWidgetOptions,
-  type WidgetEventOptions
-} from './BaseWidget'
+import { BaseWidget } from './BaseWidget'
+import type { DrawWidgetOptions, WidgetEventOptions } from './BaseWidget'
 
 /**
  * Widget for handling file uploads
@@ -32,7 +31,7 @@ export class FileUploadWidget
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
 
-    const text = 'Fileupload: Vue-only'
+    const text = `Fileupload: ${t('widgets.node2only')}`
     ctx.fillText(text, width / 2, y + height / 2)
 
     Object.assign(ctx, {

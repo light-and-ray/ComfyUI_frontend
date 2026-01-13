@@ -153,21 +153,6 @@ describe('WidgetTextarea Value Binding', () => {
     })
   })
 
-  describe('Readonly Mode', () => {
-    it('disables textarea when readonly', () => {
-      const widget = createMockWidget('readonly test')
-      const wrapper = mountComponent(widget, 'readonly test', true)
-
-      const textarea = wrapper.find('textarea')
-      if (!(textarea.element instanceof HTMLTextAreaElement)) {
-        throw new Error(
-          'Textarea element not found or is not an HTMLTextAreaElement'
-        )
-      }
-      expect(textarea.element.disabled).toBe(true)
-    })
-  })
-
   describe('Component Rendering', () => {
     it('renders textarea component', () => {
       const widget = createMockWidget('test value')
@@ -194,8 +179,8 @@ describe('WidgetTextarea Value Binding', () => {
       const widget = createMockWidget('test')
       const wrapper = mountComponent(widget, 'test')
 
-      const textarea = wrapper.find('textarea')
-      expect(textarea.attributes('placeholder')).toBe('test_textarea')
+      const textareaLabel = wrapper.find('label')
+      expect(textareaLabel.text()).toBe('test_textarea')
     })
 
     it('uses provided placeholder when specified', () => {
@@ -209,14 +194,6 @@ describe('WidgetTextarea Value Binding', () => {
 
       const textarea = wrapper.find('textarea')
       expect(textarea.attributes('placeholder')).toBe('Custom placeholder')
-    })
-
-    it('sets default rows attribute', () => {
-      const widget = createMockWidget('test')
-      const wrapper = mountComponent(widget, 'test')
-
-      const textarea = wrapper.find('textarea')
-      expect(textarea.attributes('rows')).toBe('3')
     })
   })
 

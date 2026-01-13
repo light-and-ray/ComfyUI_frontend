@@ -1,8 +1,10 @@
 import type { LGraph } from '@/lib/litegraph/src/LGraph'
 import { LGraphGroup } from '@/lib/litegraph/src/LGraphGroup'
 import { LGraphNode } from '@/lib/litegraph/src/LGraphNode'
-import { LLink, type ResolvedConnection } from '@/lib/litegraph/src/LLink'
-import { Reroute, type RerouteId } from '@/lib/litegraph/src/Reroute'
+import { LLink } from '@/lib/litegraph/src/LLink'
+import type { ResolvedConnection } from '@/lib/litegraph/src/LLink'
+import { Reroute } from '@/lib/litegraph/src/Reroute'
+import type { RerouteId } from '@/lib/litegraph/src/Reroute'
 import {
   SUBGRAPH_INPUT_ID,
   SUBGRAPH_OUTPUT_ID
@@ -116,7 +118,7 @@ export function getBoundaryLinks(
 
           const resolved = LLink.resolve(input.link, graph)
           if (!resolved) {
-            console.debug(`Failed to resolve link ID [${input.link}]`)
+            console.warn(`Failed to resolve link ID [${input.link}]`)
             continue
           }
 
@@ -220,11 +222,13 @@ export function multiClone(nodes: Iterable<LGraphNode>): ISerialisedNode[] {
     const newNode = LiteGraph.createNode(node.type)
     if (!newNode) {
       console.warn('Failed to create node', node.type)
+      const serializedData = structuredClone(node.serialize())
+      clonedNodes.push(serializedData)
       continue
     }
 
     // Must be cloned; litegraph "serialize" is mostly shallow clone
-    const data = LiteGraph.cloneObject(node.serialize())
+    const data = structuredClone(node.serialize())
     newNode.configure(data)
 
     clonedNodes.push(newNode.serialize())

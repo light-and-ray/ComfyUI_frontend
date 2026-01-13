@@ -1,10 +1,10 @@
 import _ from 'es-toolkit/compat'
 
 import type { ColorOption, LGraph } from '@/lib/litegraph/src/litegraph'
-import { Reroute } from '@/lib/litegraph/src/litegraph'
 import {
   LGraphGroup,
   LGraphNode,
+  Reroute,
   isColorable
 } from '@/lib/litegraph/src/litegraph'
 import type {
@@ -204,7 +204,7 @@ export function compressWidgetInputSlots(graph: ISerialisedGraph) {
 }
 
 function matchesLegacyApi(input: ISerialisableNodeInput) {
-  return !(input.widget && input.link === null)
+  return !(input.widget && input.link === null && !input.label)
 }
 
 /**

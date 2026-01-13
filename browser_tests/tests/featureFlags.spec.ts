@@ -2,6 +2,10 @@ import { expect } from '@playwright/test'
 
 import { comfyPageFixture as test } from '../fixtures/ComfyPage'
 
+test.beforeEach(async ({ comfyPage }) => {
+  await comfyPage.setSetting('Comfy.UseNewMenu', 'Disabled')
+})
+
 test.describe('Feature Flags', () => {
   test('Client and server exchange feature flags on connection', async ({
     comfyPage
@@ -90,9 +94,6 @@ test.describe('Feature Flags', () => {
   test('Server feature flags are received and accessible', async ({
     comfyPage
   }) => {
-    // Wait for connection to establish
-    await comfyPage.page.waitForTimeout(1000)
-
     // Get the actual server feature flags from the backend
     const serverFlags = await comfyPage.page.evaluate(() => {
       return window['app'].api.serverFeatureFlags
@@ -112,9 +113,6 @@ test.describe('Feature Flags', () => {
   test('serverSupportsFeature method works with real backend flags', async ({
     comfyPage
   }) => {
-    // Wait for connection
-    await comfyPage.page.waitForTimeout(1000)
-
     // Test serverSupportsFeature with real backend flags
     const supportsPreviewMetadata = await comfyPage.page.evaluate(() => {
       return window['app'].api.serverSupportsFeature(
@@ -166,9 +164,6 @@ test.describe('Feature Flags', () => {
   test('getServerFeature method works with real backend data', async ({
     comfyPage
   }) => {
-    // Wait for connection
-    await comfyPage.page.waitForTimeout(1000)
-
     // Test getServerFeature method
     const previewMetadataValue = await comfyPage.page.evaluate(() => {
       return window['app'].api.getServerFeature('supports_preview_metadata')
@@ -195,9 +190,6 @@ test.describe('Feature Flags', () => {
   test('getServerFeatures returns all backend feature flags', async ({
     comfyPage
   }) => {
-    // Wait for connection
-    await comfyPage.page.waitForTimeout(1000)
-
     // Test getServerFeatures returns all flags
     const allFeatures = await comfyPage.page.evaluate(() => {
       return window['app'].api.getServerFeatures()
@@ -244,9 +236,6 @@ test.describe('Feature Flags', () => {
   test('Server features are immutable when accessed via getServerFeatures', async ({
     comfyPage
   }) => {
-    // Wait for connection to establish
-    await comfyPage.page.waitForTimeout(1000)
-
     const immutabilityTest = await comfyPage.page.evaluate(() => {
       // Get a copy of server features
       const features1 = window['app'].api.getServerFeatures()

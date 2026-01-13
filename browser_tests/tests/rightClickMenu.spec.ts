@@ -3,6 +3,10 @@ import { expect } from '@playwright/test'
 import { NodeBadgeMode } from '../../src/types/nodeSource'
 import { comfyPageFixture as test } from '../fixtures/ComfyPage'
 
+test.beforeEach(async ({ comfyPage }) => {
+  await comfyPage.setSetting('Comfy.UseNewMenu', 'Disabled')
+})
+
 test.describe('Canvas Right Click Menu', () => {
   test('Can add node', async ({ comfyPage }) => {
     await comfyPage.rightClickCanvas()
@@ -114,7 +118,6 @@ test.describe('Node Right Click Menu', () => {
     await comfyPage.rightClickEmptyLatentNode()
     await comfyPage.page.click('.litemenu-entry:has-text("Unpin")')
     await comfyPage.nextFrame()
-    await comfyPage.page.waitForTimeout(256)
     await comfyPage.dragAndDrop({ x: 496, y: 618 }, { x: 200, y: 590 })
     await expect(comfyPage.canvas).toHaveScreenshot(
       'right-click-unpinned-node-moved.png'

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="min-h-12 flex justify-between items-center px-4 py-2 text-xs text-muted font-medium leading-3"
+    class="flex min-h-12 items-center justify-between px-4 py-2 text-xs leading-3 font-medium text-muted"
   >
     <div v-if="nodePack.downloads" class="flex items-center gap-1.5">
       <i class="pi pi-download text-muted"></i>
@@ -13,11 +13,7 @@
       :has-conflict="hasConflicts"
       :conflict-info="conflictInfo"
     />
-    <PackEnableToggle
-      v-else
-      :has-conflict="hasConflicts"
-      :node-pack="nodePack"
-    />
+    <PackEnableToggle v-else :node-pack="nodePack" />
   </div>
 </template>
 
@@ -25,13 +21,13 @@
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useConflictDetection } from '@/composables/useConflictDetection'
 import type { components } from '@/types/comfyRegistryTypes'
-import type { ConflictDetail } from '@/types/conflictDetectionTypes'
 import PackEnableToggle from '@/workbench/extensions/manager/components/manager/button/PackEnableToggle.vue'
 import PackInstallButton from '@/workbench/extensions/manager/components/manager/button/PackInstallButton.vue'
+import { useConflictDetection } from '@/workbench/extensions/manager/composables/useConflictDetection'
 import { useComfyManagerStore } from '@/workbench/extensions/manager/stores/comfyManagerStore'
 import { IsInstallingKey } from '@/workbench/extensions/manager/types/comfyManagerTypes'
+import type { ConflictDetail } from '@/workbench/extensions/manager/types/conflictDetectionTypes'
 
 const { nodePack } = defineProps<{
   nodePack: components['schemas']['Node']

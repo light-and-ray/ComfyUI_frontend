@@ -1,21 +1,23 @@
 <template>
   <div class="flex flex-col gap-1">
-    <label v-if="widget.name" class="text-sm opacity-80">{{
-      widget.name
-    }}</label>
     <Button
+      class="text-base-foreground w-full border-0 bg-component-node-widget-background p-2"
+      :aria-label="widget.label"
+      size="sm"
+      variant="textonly"
       v-bind="filteredProps"
-      :disabled="readonly"
-      size="small"
       @click="handleClick"
-    />
+    >
+      {{ widget.label ?? widget.name }}
+      <i v-if="widget.options?.iconClass" :class="widget.options.iconClass" />
+    </Button>
   </div>
 </template>
 
 <script setup lang="ts">
-import Button from 'primevue/button'
 import { computed } from 'vue'
 
+import Button from '@/components/ui/button/Button.vue'
 import type { SimplifiedWidget } from '@/types/simplifiedWidget'
 import {
   BADGE_EXCLUDED_PROPS,
@@ -25,7 +27,6 @@ import {
 // Button widgets don't have a v-model value, they trigger actions
 const props = defineProps<{
   widget: SimplifiedWidget<void>
-  readonly?: boolean
 }>()
 
 // Button specific excluded props
@@ -36,7 +37,7 @@ const filteredProps = computed(() =>
 )
 
 const handleClick = () => {
-  if (!props.readonly && props.widget.callback) {
+  if (props.widget.callback) {
     props.widget.callback()
   }
 }

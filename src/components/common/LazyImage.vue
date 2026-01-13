@@ -1,7 +1,8 @@
 <template>
   <div
     ref="containerRef"
-    class="relative overflow-hidden w-full h-full flex items-center justify-center"
+    class="relative flex h-full w-full items-center justify-center overflow-hidden"
+    :class="containerClass"
   >
     <Skeleton
       v-if="!isImageLoaded"
@@ -11,7 +12,6 @@
     />
     <img
       v-if="cachedSrc"
-      ref="imageRef"
       :src="cachedSrc"
       :alt="alt"
       draggable="false"
@@ -22,9 +22,15 @@
     />
     <div
       v-if="hasError"
-      class="absolute inset-0 flex items-center justify-center bg-surface-50 dark-theme:bg-surface-800 text-muted"
+      class="absolute inset-0 flex items-center justify-center"
     >
-      <i class="pi pi-image text-2xl" />
+      <img
+        src="/assets/images/default-template.png"
+        :alt="alt"
+        draggable="false"
+        :class="imageClass"
+        :style="imageStyle"
+      />
     </div>
   </div>
 </template>
@@ -35,23 +41,25 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 
 import { useIntersectionObserver } from '@/composables/useIntersectionObserver'
 import { useMediaCache } from '@/services/mediaCacheService'
+import type { ClassValue } from '@/utils/tailwindUtil'
 
 const {
   src,
   alt = '',
+  containerClass = '',
   imageClass = '',
   imageStyle,
   rootMargin = '300px'
 } = defineProps<{
   src: string
   alt?: string
-  imageClass?: string | string[] | Record<string, boolean>
+  containerClass?: ClassValue
+  imageClass?: ClassValue
   imageStyle?: Record<string, any>
   rootMargin?: string
 }>()
 
 const containerRef = ref<HTMLElement | null>(null)
-const imageRef = ref<HTMLImageElement | null>(null)
 const isIntersecting = ref(false)
 const isImageLoaded = ref(false)
 const hasError = ref(false)
