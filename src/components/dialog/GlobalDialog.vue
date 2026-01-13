@@ -56,6 +56,15 @@ const dialogStore = useDialogStore()
   @apply pt-0;
 }
 
+.settings-dialog {
+  width: 100%;
+  max-width: 1440px;
+}
+
+.settings-dialog .p-dialog-content {
+  width: 100%;
+}
+
 .manager-dialog {
   height: 80vh;
   max-width: 1724px;

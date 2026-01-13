@@ -93,6 +93,9 @@ export const useDialogService = () => {
       | 'user'
       | 'credits'
       | 'subscription'
+      | 'workspace'
+      | 'workspace-plan'
+      | 'workspace-members'
   ) {
     const props = panel ? { props: { defaultPanel: panel } } : undefined
 
@@ -100,6 +103,11 @@ export const useDialogService = () => {
       key: 'global-settings',
       headerComponent: SettingDialogHeader,
       component: SettingDialogContent,
+      dialogComponentProps: {
+        pt: {
+          root: { class: 'settings-dialog' }
+        }
+      },
       ...props
     })
   }
@@ -109,6 +117,11 @@ export const useDialogService = () => {
       key: 'global-settings',
       headerComponent: SettingDialogHeader,
       component: SettingDialogContent,
+      dialogComponentProps: {
+        pt: {
+          root: { class: 'settings-dialog' }
+        }
+      },
       props: {
         defaultPanel: 'about'
       }
